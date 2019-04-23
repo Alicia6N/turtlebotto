@@ -3,6 +3,9 @@ logs/
 build/
 bin/
 lib/
+turtlebot
+ros_control
+send_velocity_commands
 msg_gen/
 srv_gen/
 msg/*Action.msg
