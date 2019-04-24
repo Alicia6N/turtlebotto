@@ -18,6 +18,8 @@ int main(int argc, char** argv){
 			pcd_file_path = "src/turtlebotto/pcd_files/original/pcd_";
 		if (argv[1] == "--s")
 			pcd_file_path = "src/turtlebotto/pcd_files/sor/pcd_";
+		if (argv[1] == "--sv")
+			pcd_file_path = "src/turtlebotto/pcd_files/sor_filtered/pcd_";
 		if (argv[1] == "--v")
 			pcd_file_path = "src/turtlebotto/pcd_files/filtered/pcd_";
 	}

@@ -11,22 +11,22 @@ using namespace std;
 
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr global_cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr global_cloud_sor (new pcl::PointCloud<pcl::PointXYZRGB>);
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr global_cloud_sor_filtered (new pcl::PointCloud<pcl::PointXYZRGB>);
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr global_cloud_filtered (new pcl::PointCloud<pcl::PointXYZRGB>);
 
 const string original_pc_name = "/original/pcd_";
 const string sor_pc_name = "/sor/sor_pcd_";
+const string sor_filtered_pc_name = "/sor_filtered/sor_filtered_pcd_";
 const string filtered_pc_name = "/filtered/filtered_pcd_";
 bool sor_flag = false;
 
 void callback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& msg){
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZRGB>(*msg));
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_sor (new pcl::PointCloud<pcl::PointXYZRGB>);
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_sor_filtered (new pcl::PointCloud<pcl::PointXYZRGB>);
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered (new pcl::PointCloud<pcl::PointXYZRGB>);
 
 	cout << "Puntos capturados: " << cloud->size() << endl;
-
-	pcl::VoxelGrid<pcl::PointXYZRGB> vGrid;
-	vGrid.setInputCloud (cloud);
 
 	if (sor_flag){
 		pcl::StatisticalOutlierRemoval<pcl::PointXYZRGB> sor;
@@ -36,9 +36,14 @@ void callback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& msg){
 		sor.filter (*cloud_sor);
 
 		cout << "Puntos tras SOR: " << cloud_sor->size() << endl;
+		pcl::VoxelGrid<pcl::PointXYZRGB> vGrid;
 		vGrid.setInputCloud (cloud_sor);
+		vGrid.setLeafSize (0.05f, 0.05f, 0.05f);
+		vGrid.filter (*cloud_sor_filtered);
 	}
 	
+	pcl::VoxelGrid<pcl::PointXYZRGB> vGrid;
+	vGrid.setInputCloud (cloud);
 	vGrid.setLeafSize (0.05f, 0.05f, 0.05f);
 	vGrid.filter (*cloud_filtered);
 
@@ -46,6 +51,7 @@ void callback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& msg){
 
 	global_cloud = cloud;
 	global_cloud_sor = cloud_sor;
+	global_cloud_sor_filtered = cloud_sor_filtered;
 	global_cloud_filtered = cloud_filtered;
 }
 
@@ -76,6 +82,12 @@ int main(int argc, char** argv){
 				ss <<  "src/turtlebotto/pcd_files/" << sor_pc_name << i << ".pcd";
 				path = ss.str();
 				pcl::io::savePCDFile (path, *global_cloud_sor, true);
+				cout << path << " file saved.\n";
+				ss.str(std::string());
+
+				ss <<  "src/turtlebotto/pcd_files/" << sor_filtered_pc_name << i << ".pcd";
+				path = ss.str();
+				pcl::io::savePCDFile (path, *global_cloud_sor_filtered, true);
 				cout << path << " file saved.\n";
 				ss.str(std::string());
 			}
