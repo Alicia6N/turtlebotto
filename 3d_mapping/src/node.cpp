@@ -13,14 +13,16 @@ using namespace std;
 string pcd_file_path;
 
 int main(int argc, char** argv){
+	string argumento = argv[1];
+
 	if (argc < 2){
-		if (argv[1] == "--o")
+		if (argumento == "--o")
 			pcd_file_path = "src/turtlebotto/pcd_files/original/pcd_";
-		if (argv[1] == "--s")
+		if (argumento == "--s")
 			pcd_file_path = "src/turtlebotto/pcd_files/sor/pcd_";
-		if (argv[1] == "--sv")
+		if (argumento == "--sv")
 			pcd_file_path = "src/turtlebotto/pcd_files/sor_filtered/pcd_";
-		if (argv[1] == "--v")
+		if (argumento == "--v")
 			pcd_file_path = "src/turtlebotto/pcd_files/filtered/pcd_";
 	}
 	else{

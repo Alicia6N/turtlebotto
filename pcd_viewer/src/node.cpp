@@ -25,28 +25,27 @@ void simpleVis ()
 
 int main(int argc, char** argv)
 {
-  ros::init(argc, argv, "pcl_viewer");
-  ros::NodeHandle nh;
-  boost::thread t(simpleVis);
-  bool name = false;
-  if(argc>=2){
-       while(ros::ok()){ 
-        ros::spinOnce();
-        stringstream ss;
-        ss <<  "src/turtlebotto/pcd_files/pcd_" << argv[1] << ".pcd";
-        string path = ss.str();
-        if(pcl::io::loadPCDFile<pcl::PointXYZRGB> (path, *visu_pc)==-1){
-            cout << "Can't read file\n";
-        }
+	ros::init(argc, argv, "pcl_viewer");
+	ros::NodeHandle nh;
+	boost::thread t(simpleVis);
+	bool name = false;
+	if(argc>=2){
+		ros::spinOnce();
+		stringstream ss;
+		ss <<  "../../get_pointclouds/src/pcd_files/" << argv[1] << ".pcd";
+		string path = ss.str();
+
+		if(pcl::io::loadPCDFile<pcl::PointXYZRGB> (path, *visu_pc)==-1){
+			cout << "Can't read file\n";
+		}
 		else if(!name){
 			cout << "Viewing file: " << path << "\n";
 			name = true;
+			while(true){ }
 		}
-
-        }
-  }
-  else{
-	  cout << "No file name passed\n";
-  }
+	}
+	else{
+		cout << "No file name passed\n";
+	}
  
 }

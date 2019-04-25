@@ -14,10 +14,10 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr global_cloud_sor (new pcl::PointCloud<pcl
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr global_cloud_sor_filtered (new pcl::PointCloud<pcl::PointXYZRGB>);
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr global_cloud_filtered (new pcl::PointCloud<pcl::PointXYZRGB>);
 
-const string original_pc_name = "/original/pcd_";
-const string sor_pc_name = "/sor/sor_pcd_";
-const string sor_filtered_pc_name = "/sor_filtered/sor_filtered_pcd_";
-const string filtered_pc_name = "/filtered/filtered_pcd_";
+const string original_pc_name = "original/pcd_";
+const string sor_pc_name = "sor/sor_pcd_";
+const string sor_filtered_pc_name = "sor_filtered/sor_filtered_pcd_";
+const string filtered_pc_name = "filtered/filtered_pcd_";
 bool sor_flag = false;
 
 void callback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& msg){
@@ -56,9 +56,9 @@ void callback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& msg){
 }
 
 int main(int argc, char** argv){
-	if (argc > 2)
-		if (argv[1] == "--sor")
-			sor_flag = true;
+	string argumento = argv[1];
+	if (argumento == "--sor")
+		sor_flag = true;
 
 	ros::init(argc, argv, "get_pointclouds_node");
 	ros::NodeHandle nh;
@@ -71,36 +71,36 @@ int main(int argc, char** argv){
 		ros::spinOnce();
 		try{
 			//original point cloud
-			ss <<  "src/turtlebotto/pcd_files/" << original_pc_name << i << ".pcd";
-			path = ss.str();
-			pcl::io::savePCDFile (path, *global_cloud, true);
+			path = "pcd_files/" + original_pc_name + to_string(i) + ".pcd";
+			pcl::PCDWriter writer;
+        	writer.write<pcl::PointXYZRGB> (path, *global_cloud, false);
 			cout << path << " file saved.\n";
-			ss.str(std::string());
+			path = "";
 
 			//sor point cloud
 			if (sor_flag){
-				ss <<  "src/turtlebotto/pcd_files/" << sor_pc_name << i << ".pcd";
-				path = ss.str();
-				pcl::io::savePCDFile (path, *global_cloud_sor, true);
+				path = "pcd_files/" + sor_pc_name + to_string(i) + ".pcd";
+        		writer.write<pcl::PointXYZRGB> (path, *global_cloud_sor, false);
 				cout << path << " file saved.\n";
-				ss.str(std::string());
+				path = "";
 
-				ss <<  "src/turtlebotto/pcd_files/" << sor_filtered_pc_name << i << ".pcd";
-				path = ss.str();
-				pcl::io::savePCDFile (path, *global_cloud_sor_filtered, true);
+				path = "pcd_files/" + sor_filtered_pc_name + to_string(i) + ".pcd";
+        		writer.write<pcl::PointXYZRGB> (path, *global_cloud_sor_filtered, false);
 				cout << path << " file saved.\n";
-				ss.str(std::string());
+				path = "";
 			}
-
+			
 			//voxelgrid point cloud
-			ss <<  "src/turtlebotto/pcd_files/" << filtered_pc_name << i << ".pcd";
-			path = ss.str();
-			pcl::io::savePCDFile (path, *global_cloud_filtered, true);
+			path = "pcd_files/" + filtered_pc_name + to_string(i) + ".pcd";
+			writer.write<pcl::PointXYZRGB> (path, *global_cloud_filtered, false);
 			cout << path << " file saved.\n";
-			ss.str(std::string());
+			path = "";
 
 			boost::this_thread::sleep(boost::posix_time::milliseconds(1000));
 			i++;
-		} catch(const std::exception& ex){ }
+		} 
+		catch(const std::exception& ex){
+			cout << ex.what() << endl;
+		}
 	}
 }
