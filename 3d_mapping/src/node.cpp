@@ -17,13 +17,13 @@ int main(int argc, char** argv){
 
 	if (argc < 2){
 		if (argumento == "--o")
-			pcd_file_path = "src/turtlebotto/pcd_files/original/pcd_";
+			pcd_file_path = "../../get_pointclouds/src/pcd_files/original/pcd_";
 		if (argumento == "--s")
-			pcd_file_path = "src/turtlebotto/pcd_files/sor/pcd_";
+			pcd_file_path = "../../get_pointclouds/src/pcd_files/sor/sor_pcd_";
 		if (argumento == "--sv")
-			pcd_file_path = "src/turtlebotto/pcd_files/sor_filtered/pcd_";
+			pcd_file_path = "../../get_pointclouds/src/pcd_files/sor_filtered/sor_filtered_pcd_";
 		if (argumento == "--v")
-			pcd_file_path = "src/turtlebotto/pcd_files/filtered/pcd_";
+			pcd_file_path = "../../get_pointclouds/src/pcd_files/filtered/filtered_pcd_";
 	}
 	else{
 		string usage = "{--o (Original pcds) | --s (SOR pcds) | --v (VoxelGrid pcds)}";
