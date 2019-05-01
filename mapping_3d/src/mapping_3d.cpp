@@ -43,6 +43,18 @@ void visualize_keypoints (const pcl::PointCloud<pcl::PointXYZRGB>::Ptr points,
   viz.spin ();
 }
 
+void visualize_normals (const pcl::PointCloud<pcl::PointXYZRGB>::Ptr points,
+                        const pcl::PointCloud<pcl::PointXYZRGB>::Ptr normal_points,
+                        const pcl::PointCloud<pcl::Normal>::Ptr normals){
+  // Add the points and normals to the vizualizer
+  pcl::visualization::PCLVisualizer viz;
+  viz.addPointCloud (points, "points");
+  viz.addPointCloud (normal_points, "normal_points");
+  viz.addPointCloudNormals<pcl::PointXYZRGB, pcl::Normal> (normal_points, normals, 1, 0.01, "normals");
+  // Give control over to the visualizer
+  viz.spin ();
+}
+
 void visualize_correspondences (const pcl::PointCloud<pcl::PointXYZRGB>::Ptr points1,
                                 const pcl::PointCloud<pcl::PointWithScale>::Ptr keypoints1,
                                 const pcl::PointCloud<pcl::PointXYZRGB>::Ptr points2,
@@ -74,10 +86,13 @@ void visualize_correspondences (const pcl::PointCloud<pcl::PointXYZRGB>::Ptr poi
   std::sort (temp.begin (), temp.end ());
   float median_score = temp[temp.size ()/2];
   // Draw lines between the best corresponding points
+  int kpsize = 0;
+
   for (size_t i = 0; i < keypoints_left->size (); ++i){
     if (correspondence_scores[i] > median_score){
       continue; // Don't draw weak correspondences
     }
+    kpsize++;
     // Get the pair of points
     const pcl::PointWithScale & p_left = keypoints_left->points[i];
     const pcl::PointWithScale & p_right = keypoints_right->points[correspondences[i]];
@@ -95,6 +110,8 @@ void visualize_correspondences (const pcl::PointCloud<pcl::PointXYZRGB>::Ptr poi
     // Draw the line
     viz.addLine (p_left, p_right, r, g, b, ss.str ());
   }
+
+  cout << "Correspondences size: " << kpsize << endl;
   // Give control over to the visualizer
   viz.spin ();
 }
@@ -106,21 +123,21 @@ boost::shared_ptr<pcl::Correspondences>  correspondences_filter(pcl::PointCloud<
 	boost::shared_ptr<pcl::Correspondences> cor_all (new pcl::Correspondences);
 	boost::shared_ptr<pcl::Correspondences> cor_inliers (new pcl::Correspondences);
 
-	pcl::registration::CorrespondenceEstimation<pcl::PFHSignature125, pcl::PFHSignature125> corEst; 
-	pcl::registration::CorrespondenceRejectorSampleConsensus<pcl::PointWithScale> sac; 
+	pcl::registration::CorrespondenceEstimation<pcl::PFHSignature125, pcl::PFHSignature125> corEst;
+	pcl::registration::CorrespondenceRejectorSampleConsensus<pcl::PointWithScale> sac;
 
-	corEst.setInputSource (desc_pfh_1); 
-	corEst.setInputTarget (desc_pfh_2); 	
+	corEst.setInputSource (desc_pfh_1);
+	corEst.setInputTarget (desc_pfh_2);
 	corEst.determineReciprocalCorrespondences (*cor_all);
 
-	sac.setInputSource (keypoint1); 
-	sac.setInputTarget (keypoint2); 
-	sac.setInlierThreshold (0.1); 
-	sac.setMaximumIterations (1500); 
-	sac.setInputCorrespondences (cor_all);	
+	sac.setInputSource (keypoint1);
+	sac.setInputTarget (keypoint2);
+	sac.setInlierThreshold (0.1);
+	sac.setMaximumIterations (1500);
+	sac.setInputCorrespondences (cor_all);
 	sac.getCorrespondences (*cor_inliers);
 
-	return cor_inliers; 
+	return cor_inliers;
 }
 
 void compute_PFH_features_at_keypoints (pcl::PointCloud<pcl::PointXYZRGB>::Ptr &points,
@@ -200,7 +217,16 @@ void detect_keypoints(pcl::PointCloud<pcl::PointXYZRGB>::Ptr &points, pcl::Point
     sift.setInputCloud(points);
     //Detect and store
     sift.compute(*keypoints);
-    visualize_keypoints(points,keypoints);
+    //visualize_keypoints(points,keypoints);
+}
+
+Eigen::Matrix4f rigidTransformation(pcl::PointCloud<pcl::PointWithScale>::Ptr &nextKeypoints, pcl::PointCloud<pcl::PointWithScale>::Ptr &currKeypoints, boost::shared_ptr<pcl::Correspondences> &corresp){
+
+  Eigen::Matrix4f transform; 
+  pcl::registration::TransformationEstimationSVD<pcl::PointWithScale, pcl::PointWithScale> transformSVD;
+  transformSVD.estimateRigidTransformation (*nextKeypoints, *currKeypoints, *corresp, transform); 
+
+  return transform;
 }
 
 int main (int argc, char** argv){
@@ -241,9 +267,12 @@ int main (int argc, char** argv){
         return 0;
 	}
 
-    cout << "Set PCD flags" << endl;
+    cout << "PCD flags set" << endl;
+    pcl::PCDReader reader; 
 
-    pcl::PCDReader reader;    
+    //pcl::PointCloud<pcl::PointXYZRGB>::Ptr fullCloud (new pcl::PointCloud<pcl::PointXYZRGB>);
+    //reader.read<pcl::PointXYZRGB> ("src/turtlebotto/get_pointclouds/src/pcd_files/original/pcd_" + std::to_string(id) + ".pcd", *currCloud);
+
     while(ros::ok()){
         //Read two pcd files.
         reader.read<pcl::PointXYZRGB> (pcd_file_path + std::to_string(id) + ".pcd", *currCloud);
@@ -255,6 +284,8 @@ int main (int argc, char** argv){
         compute_surface_normals (currCloud, normal_radius, currNormals);
         cout << "Computing normals for " << id+1 << "..." << endl;
         compute_surface_normals (nextCloud, normal_radius, nextNormals);
+
+        //visualize_normals (fullCloud, currCloud, currNormals);
 
         // Detect keypoints
         cout << "Detecting keypoints in " << id << "... ";
@@ -275,10 +306,15 @@ int main (int argc, char** argv){
         cout << "Find feature correspondences" << endl;
         find_feature_correspondences (currDescriptors, nextDescriptors, correspondences, correspondence_scores);
         cout << "Filter feature correspondences" << endl;
+        //visualize_correspondences (currCloud, currKeypoints, nextCloud, nextKeypoints, correspondences, correspondence_scores);
         boost::shared_ptr<pcl::Correspondences> corresp = correspondences_filter(currDescriptors, nextDescriptors, currKeypoints, nextKeypoints);
 
+        Eigen::Matrix4f transf_matrix = rigidTransformation(nextKeypoints, currKeypoints, corresp);
+
+        pcl::transformPointCloud (*nextCloud, *currCloud, transf_matrix);
+
         // Visualize the two point clouds and their feature correspondences
-        visualize_correspondences (currCloud, currKeypoints, nextCloud, nextKeypoints, correspondences, correspondence_scores);
+        //visualize_correspondences (currCloud, currKeypoints, nextCloud, nextKeypoints, correspondences, correspondence_scores);
 
         //id++;
     }
