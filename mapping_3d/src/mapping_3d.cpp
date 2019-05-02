@@ -276,9 +276,9 @@ int main (int argc, char** argv){
         //reader.read<pcl::PointXYZRGB> (pcd_file_path + std::to_string(id) + ".pcd", *currCloud);
 		//cout << "Read:" << reader.read<pcl::PointXYZRGB> (pcd_file_path + std::to_string(id+1) + ".pcd", *nextCloud) << endl;
         if(reader.read<pcl::PointXYZRGB> (pcd_file_path + std::to_string(id+1) + ".pcd", *nextCloud) != 0) {
-			cout << "Empty" << endl;
-			break;
-		}
+          cout << "Empty" << endl;
+          break;
+        }
         // Compute surface normals
         const float normal_radius = 0.03;
         cout << "Computing normals for " << id << "..." << endl;
