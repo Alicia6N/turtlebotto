@@ -246,7 +246,7 @@ int main (int argc, char** argv){
     cout << "Created pointcloud variables" << endl;
     int id = 0;
     string pcd_file_path = "";
-	  string argumento = "";
+	string argumento = "";
     string final_path = "src/turtlebotto/mapping_3d/src/final_cloud.pcd";
     if (argc == 2){
         argumento = argv[1];
@@ -312,7 +312,6 @@ int main (int argc, char** argv){
         boost::shared_ptr<pcl::Correspondences> corresp = correspondences_filter(currDescriptors, nextDescriptors, currKeypoints, nextKeypoints);
 
         Eigen::Matrix4f transf_matrix = rigidTransformation(nextKeypoints, currKeypoints, corresp);
-
         pcl::transformPointCloud (*nextCloud, *dstCloud, transf_matrix);
 
 		if(id==0) {
@@ -323,9 +322,6 @@ int main (int argc, char** argv){
 			*finalCloud += *dstCloud;
 			*currCloud = *dstCloud;        
 		}
-
-        // Visualize the two point clouds and their feature correspondences
-        //visualize_correspondences (currCloud, currKeypoints, nextCloud, nextKeypoints, correspondences, correspondence_scores);
 
         id++;
     }

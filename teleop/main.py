@@ -17,7 +17,7 @@ import math
 class Camera:
   def __init__(self):
     self.odom_topic = "/odom"
-    self.vel_topic = '/cmd_vel'
+    self.vel_topic = '/mobile_base/commands/velocity'
     self.bridge = CvBridge()
     self.odom_sub = rospy.Subscriber(self.odom_topic, Odometry, self.odom_callback)
     self.cmd_vel = rospy.Publisher(self.vel_topic, Twist, queue_size=1)
@@ -44,13 +44,13 @@ if __name__ == '__main__':
           if event.type == QUIT:
             sys.exit()
           if event.type == KEYDOWN and event.key == 275: # left
-            move_cmd.angular.z -= 0.4
-            move_cmd.linear.x = 0.2
+            move_cmd.angular.z -= 0.3
+            move_cmd.linear.x = 0.0
           elif event.type == KEYDOWN and event.key == 276: # right
-            move_cmd.angular.z += 0.4
-            move_cmd.linear.x = 0.2
+            move_cmd.angular.z += 0.3
+            move_cmd.linear.x = 0.0
           elif event.type == KEYDOWN and event.key == 273: # forward
-            move_cmd.linear.x = 0.2
+            move_cmd.linear.x = 0.4
             move_cmd.angular.z = 0.0
           elif event.type == KEYDOWN and event.key == 274: # stop
             if move_cmd.linear.x > 0:
