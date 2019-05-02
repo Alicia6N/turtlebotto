@@ -45,6 +45,7 @@ int main(int argc, char** argv){
 		argumento += to_string(index);
     }
     else{
+		argumento = argv[1];
 		if (argc == 2){
 			if (argumento == "--f")
 				pcd_file_path = "src/turtlebotto/mapping_3d/src/final_cloud";
@@ -69,7 +70,7 @@ int main(int argc, char** argv){
 	if(argc>=2){
 		ros::spinOnce();
 		stringstream ss;
-		ss <<  argumento << ".pcd";
+		ss <<  pcd_file_path << ".pcd";
 		string path = ss.str();
 
 		if(pcl::io::loadPCDFile<pcl::PointXYZRGB> (path, *visu_pc)==-1){

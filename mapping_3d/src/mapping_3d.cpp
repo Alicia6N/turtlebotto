@@ -246,7 +246,8 @@ int main (int argc, char** argv){
     cout << "Created pointcloud variables" << endl;
     int id = 0;
     string pcd_file_path = "";
-    string final_path = "/src/turtlebotto/mapping_3d/src/final_cloud.pcd";
+	string argumento = "";
+    string final_path = "src/turtlebotto/mapping_3d/src/final_cloud.pcd";
     if (argc == 2){
         argumento = argv[1];
         if (argumento == "--o")
@@ -274,8 +275,11 @@ int main (int argc, char** argv){
 		pcl::PointCloud<pcl::PointXYZRGB>::Ptr dstCloud (new pcl::PointCloud<pcl::PointXYZRGB>);
         //Read two pcd files.
         //reader.read<pcl::PointXYZRGB> (pcd_file_path + std::to_string(id) + ".pcd", *currCloud);
-        if(reader.read<pcl::PointXYZRGB> (pcd_file_path + std::to_string(id+1) + ".pcd", *nextCloud) != 0) break;
-
+		//cout << "Read:" << reader.read<pcl::PointXYZRGB> (pcd_file_path + std::to_string(id+1) + ".pcd", *nextCloud) << endl;
+        if(reader.read<pcl::PointXYZRGB> (pcd_file_path + std::to_string(id+1) + ".pcd", *nextCloud) != 0) {
+			cout << "Empty" << endl;
+			break;
+		}
         // Compute surface normals
         const float normal_radius = 0.03;
         cout << "Computing normals for " << id << "..." << endl;
@@ -286,9 +290,9 @@ int main (int argc, char** argv){
         //visualize_normals (fullCloud, currCloud, currNormals);
 
         // Detect keypoints
-        cout << "Detecting keypoints in " << id << "... ";
+        cout << "Detecting keypoints in " << id << "... " << endl;
         detect_keypoints(currCloud, currKeypoints);
-        cout << "Detecting keypoints in " << id+1 << "... ";
+        cout << "Detecting keypoints in " << id+1 << "... " << endl;
         detect_keypoints(nextCloud, nextKeypoints);
         
         // Compute PFH features
