@@ -259,11 +259,11 @@ int main (int argc, char** argv){
             pcd_file_path = "src/turtlebotto/get_pointclouds/src/pcd_files/filtered/filtered_pcd_";
     }
     else{
-          cout << argc;
-          string usage = "{--o (Original pcds) | --s (SOR pcds) | --v (VoxelGrid pcds)}";
-          cout << "Incorrect program use! Usage must be: " << endl;
-          cout << "rosrun *package_name* *executable_name* " << usage << endl;
-          return 0;
+			cout << argc;
+			string usage = "{--o (Original pcds) | --s (SOR pcds) | --v (VoxelGrid pcds)}";
+			cout << "Incorrect program use! Usage must be: " << endl;
+			cout << "rosrun *package_name* *executable_name* " << usage << endl;
+			return 0;
     }
 
     cout << "PCD flags set" << endl;
@@ -311,7 +311,6 @@ int main (int argc, char** argv){
         boost::shared_ptr<pcl::Correspondences> corresp = correspondences_filter(currDescriptors, nextDescriptors, currKeypoints, nextKeypoints);
 
         Eigen::Matrix4f transf_matrix = rigidTransformation(nextKeypoints, currKeypoints, corresp);
-
         pcl::transformPointCloud (*nextCloud, *dstCloud, transf_matrix);
 
 		if(id==0) {
@@ -322,9 +321,6 @@ int main (int argc, char** argv){
 			*finalCloud += *dstCloud;
 			*currCloud = *dstCloud;        
 		}
-
-        // Visualize the two point clouds and their feature correspondences
-        //visualize_correspondences (currCloud, currKeypoints, nextCloud, nextKeypoints, correspondences, correspondence_scores);
 
         id++;
     }
