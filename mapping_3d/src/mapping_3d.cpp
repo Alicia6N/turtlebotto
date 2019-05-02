@@ -228,10 +228,10 @@ Eigen::Matrix4f rigidTransformation(pcl::PointCloud<pcl::PointWithScale>::Ptr &n
 
   return transform;
 }
-
 int main (int argc, char** argv){
     ros::init(argc, argv, "mapping_3d_node");
     // Pevious, current and accumulated cloud
+	   
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr currCloud (new pcl::PointCloud<pcl::PointXYZRGB>);
     pcl::PointCloud<pcl::Normal>::Ptr currNormals (new pcl::PointCloud<pcl::Normal>);
     pcl::PointCloud<pcl::PointWithScale>::Ptr currKeypoints (new pcl::PointCloud<pcl::PointWithScale>);
@@ -241,13 +241,12 @@ int main (int argc, char** argv){
     pcl::PointCloud<pcl::Normal>::Ptr nextNormals (new pcl::PointCloud<pcl::Normal>);
     pcl::PointCloud<pcl::PointWithScale>::Ptr nextKeypoints (new pcl::PointCloud<pcl::PointWithScale>);
     pcl::PointCloud<pcl::PFHSignature125>::Ptr nextDescriptors (new pcl::PointCloud<pcl::PFHSignature125>);
-
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr finalCloud (new pcl::PointCloud<pcl::PointXYZRGB>);
 
     cout << "Created pointcloud variables" << endl;
-
     int id = 0;
     string pcd_file_path = "";
+    string final_path = "/src/turtlebotto/mapping_3d/src/final_cloud.pcd";
     if (argc == 2){
         string argumento = argv[1];
         if (argumento == "--o")
@@ -270,12 +269,11 @@ int main (int argc, char** argv){
     cout << "PCD flags set" << endl;
     pcl::PCDReader reader; 
 
-    //pcl::PointCloud<pcl::PointXYZRGB>::Ptr fullCloud (new pcl::PointCloud<pcl::PointXYZRGB>);
-    //reader.read<pcl::PointXYZRGB> ("src/turtlebotto/get_pointclouds/src/pcd_files/original/pcd_" + std::to_string(id) + ".pcd", *currCloud);
-
+	reader.read<pcl::PointXYZRGB> (pcd_file_path + std::to_string(id) + ".pcd", *currCloud);
     while(ros::ok()){
+		pcl::PointCloud<pcl::PointXYZRGB>::Ptr dstCloud (new pcl::PointCloud<pcl::PointXYZRGB>);
         //Read two pcd files.
-        reader.read<pcl::PointXYZRGB> (pcd_file_path + std::to_string(id) + ".pcd", *currCloud);
+        //reader.read<pcl::PointXYZRGB> (pcd_file_path + std::to_string(id) + ".pcd", *currCloud);
         if(reader.read<pcl::PointXYZRGB> (pcd_file_path + std::to_string(id+1) + ".pcd", *nextCloud) != 0) break;
 
         // Compute surface normals
@@ -311,16 +309,26 @@ int main (int argc, char** argv){
 
         Eigen::Matrix4f transf_matrix = rigidTransformation(nextKeypoints, currKeypoints, corresp);
 
-        pcl::transformPointCloud (*nextCloud, *currCloud, transf_matrix);
+        pcl::transformPointCloud (*nextCloud, *dstCloud, transf_matrix);
+
+        if(id==0) {
+			*finalCloud = *dstCloud;	
+			*currCloud = *dstCloud;	
+        }
+		else {
+			*finalCloud += *dstCloud;
+			*currCloud = *dstCloud;        
+		}
 
         // Visualize the two point clouds and their feature correspondences
         //visualize_correspondences (currCloud, currKeypoints, nextCloud, nextKeypoints, correspondences, correspondence_scores);
 
-        //id++;
+        id++;
     }
+    //***************************************************************///
 
-    //Write final scene
     pcl::PCDWriter writer;
-    //writer.write<pcl::PointXYZRGB> ("," *finalCloud, false);
+    //Write final scene
+    writer.write<pcl::PointXYZRGB> (final_path, *finalCloud, false);
     return (0);
 }
