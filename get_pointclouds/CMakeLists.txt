@@ -137,6 +137,7 @@ add_definitions(${PCL_DEFINITIONS})
 
 ## Declare a C++ executable
  add_executable(get_pointclouds_node src/node.cpp)
+ add_executable(get_pointclouds_filters src/filters.cpp)
 
 ## Add cmake target dependencies of the executable
 ## same as for the library above
@@ -144,6 +145,11 @@ add_definitions(${PCL_DEFINITIONS})
 
 ## Specify libraries to link a library or executable target against
  target_link_libraries(get_pointclouds_node
+   ${catkin_LIBRARIES}
+   ${PCL_LIBRARIES}
+ )
+
+ target_link_libraries(get_pointclouds_filters
    ${catkin_LIBRARIES}
    ${PCL_LIBRARIES}
  )

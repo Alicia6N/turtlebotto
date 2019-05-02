@@ -10,58 +10,18 @@
 using namespace std;
 
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr global_cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
-pcl::PointCloud<pcl::PointXYZRGB>::Ptr global_cloud_sor (new pcl::PointCloud<pcl::PointXYZRGB>);
-pcl::PointCloud<pcl::PointXYZRGB>::Ptr global_cloud_sor_filtered (new pcl::PointCloud<pcl::PointXYZRGB>);
-pcl::PointCloud<pcl::PointXYZRGB>::Ptr global_cloud_filtered (new pcl::PointCloud<pcl::PointXYZRGB>);
-
 const string original_pc_name = "src/turtlebotto/get_pointclouds/src/pcd_files/original/pcd_";
-const string sor_pc_name = "src/turtlebotto/get_pointclouds/src/pcd_files/sor/sor_pcd_";
-const string sor_filtered_pc_name = "src/turtlebotto/get_pointclouds/src/pcd_files/sor_filtered/sor_filtered_pcd_";
-const string filtered_pc_name = "src/turtlebotto/get_pointclouds/src/pcd_files/filtered/filtered_pcd_";
-bool sor_flag = false;
 
 void callback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& msg){
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZRGB>(*msg));
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_sor (new pcl::PointCloud<pcl::PointXYZRGB>);
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_sor_filtered (new pcl::PointCloud<pcl::PointXYZRGB>);
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered (new pcl::PointCloud<pcl::PointXYZRGB>);
 
-	cout << "Puntos capturados: " << cloud->size() << endl;
-
-	if (sor_flag){
-		pcl::StatisticalOutlierRemoval<pcl::PointXYZRGB> sor;
-		sor.setInputCloud (cloud);
-		sor.setMeanK (50);
-		sor.setStddevMulThresh (1.0);
-		sor.filter (*cloud_sor);
-
-		cout << "Puntos tras SOR: " << cloud_sor->size() << endl;
-		pcl::VoxelGrid<pcl::PointXYZRGB> vGrid;
-		vGrid.setInputCloud (cloud_sor);
-		vGrid.setLeafSize (0.05f, 0.05f, 0.05f);
-		vGrid.filter (*cloud_sor_filtered);
-	}
-	
-	pcl::VoxelGrid<pcl::PointXYZRGB> vGrid;
-	vGrid.setInputCloud (cloud);
-	vGrid.setLeafSize (0.05f, 0.05f, 0.05f);
-	vGrid.filter (*cloud_filtered);
-
-	cout << "Puntos tras VoxelGrid: " << cloud_filtered->size() << endl;
+	cout << "------\n";
+	cout << "Amount of captured points: " << cloud->size() << endl;
 
 	global_cloud = cloud;
-	global_cloud_sor = cloud_sor;
-	global_cloud_sor_filtered = cloud_sor_filtered;
-	global_cloud_filtered = cloud_filtered;
 }
 
 int main(int argc, char** argv){
-	if (argc == 2){	
-		string argumento = argv[1];
-		if (argumento == "--sor")
-			sor_flag = true;
-	}
-
 	ros::init(argc, argv, "get_pointclouds_node");
 	ros::NodeHandle nh;
 	ros::Subscriber sub = nh.subscribe<pcl::PointCloud<pcl::PointXYZRGB> >("/camera/depth/points", 1, callback);
@@ -77,28 +37,6 @@ int main(int argc, char** argv){
 			pcl::PCDWriter writer;
         	writer.write<pcl::PointXYZRGB> (path, *global_cloud, false);
 			cout << path << " file saved.\n";
-			path = "";
-
-			//sor point cloud
-			if (sor_flag){
-				path = sor_pc_name + to_string(i) + ".pcd";
-        		writer.write<pcl::PointXYZRGB> (path, *global_cloud_sor, false);
-				cout << path << " file saved.\n";
-				path = "";
-
-				path = sor_filtered_pc_name + to_string(i) + ".pcd";
-        		writer.write<pcl::PointXYZRGB> (path, *global_cloud_sor_filtered, false);
-				cout << path << " file saved.\n";
-				path = "";
-			}
-			
-			//voxelgrid point cloud
-			path = filtered_pc_name + to_string(i) + ".pcd";
-			writer.write<pcl::PointXYZRGB> (path, *global_cloud_filtered, false);
-			cout << path << " file saved.\n";
-			path = "";
-
-			boost::this_thread::sleep(boost::posix_time::milliseconds(100));
 			i++;
 		} 
 		catch(const std::exception& ex){
