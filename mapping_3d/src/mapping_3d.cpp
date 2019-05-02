@@ -248,8 +248,9 @@ int main (int argc, char** argv){
 
     int id = 0;
     string pcd_file_path = "";
+    string argumento = "";
     if (argc == 2){
-        string argumento = argv[1];
+        argumento = argv[1];
         if (argumento == "--o")
             pcd_file_path = "src/turtlebotto/get_pointclouds/src/pcd_files/original/pcd_";
         else if (argumento == "--s")
@@ -258,14 +259,14 @@ int main (int argc, char** argv){
             pcd_file_path = "src/turtlebotto/get_pointclouds/src/pcd_files/sor_filtered/sor_filtered_pcd_";
         else if (argumento == "--v")
             pcd_file_path = "src/turtlebotto/get_pointclouds/src/pcd_files/filtered/filtered_pcd_";
-	}
-	else{
-        cout << argc;
-		string usage = "{--o (Original pcds) | --s (SOR pcds) | --v (VoxelGrid pcds)}";
-		cout << "Incorrect program use! Usage must be: " << endl;
-		cout << "rosrun *package_name* *executable_name* " << usage << endl;
-        return 0;
-	}
+    }
+    else{
+          cout << argc;
+          string usage = "{--o (Original pcds) | --s (SOR pcds) | --v (VoxelGrid pcds)}";
+          cout << "Incorrect program use! Usage must be: " << endl;
+          cout << "rosrun *package_name* *executable_name* " << usage << endl;
+          return 0;
+    }
 
     cout << "PCD flags set" << endl;
     pcl::PCDReader reader; 
@@ -311,7 +312,7 @@ int main (int argc, char** argv){
 
         Eigen::Matrix4f transf_matrix = rigidTransformation(nextKeypoints, currKeypoints, corresp);
 
-        pcl::transformPointCloud (*nextCloud, *currCloud, transf_matrix);
+        pcl::transformPointCloud (*currCloud, *currCloud, transf_matrix);
 
         // Visualize the two point clouds and their feature correspondences
         //visualize_correspondences (currCloud, currKeypoints, nextCloud, nextKeypoints, correspondences, correspondence_scores);
