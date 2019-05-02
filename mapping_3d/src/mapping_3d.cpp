@@ -246,6 +246,7 @@ int main (int argc, char** argv){
     cout << "Created pointcloud variables" << endl;
     int id = 0;
     string pcd_file_path = "";
+	string argumento = "";
     string final_path = "/src/turtlebotto/mapping_3d/src/final_cloud.pcd";
     if (argc == 2){
         argumento = argv[1];
