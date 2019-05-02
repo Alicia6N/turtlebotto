@@ -221,7 +221,6 @@ void detect_keypoints(pcl::PointCloud<pcl::PointXYZRGB>::Ptr &points, pcl::Point
 }
 
 Eigen::Matrix4f rigidTransformation(pcl::PointCloud<pcl::PointWithScale>::Ptr &nextKeypoints, pcl::PointCloud<pcl::PointWithScale>::Ptr &currKeypoints, boost::shared_ptr<pcl::Correspondences> &corresp){
-
   Eigen::Matrix4f transform; 
   pcl::registration::TransformationEstimationSVD<pcl::PointWithScale, pcl::PointWithScale> transformSVD;
   transformSVD.estimateRigidTransformation (*nextKeypoints, *currKeypoints, *corresp, transform); 

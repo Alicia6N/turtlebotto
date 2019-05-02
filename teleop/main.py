@@ -17,7 +17,7 @@ import math
 class Camera:
   def __init__(self):
     self.odom_topic = "/odom"
-    self.vel_topic = '/mobile_base/commands/velocity'
+    self.vel_topic = "/mobile_base/commands/velocity"
     self.bridge = CvBridge()
     self.odom_sub = rospy.Subscriber(self.odom_topic, Odometry, self.odom_callback)
     self.cmd_vel = rospy.Publisher(self.vel_topic, Twist, queue_size=1)
