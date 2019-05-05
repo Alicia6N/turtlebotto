@@ -41,7 +41,7 @@ int main(int argc, char** argv){
 
         //voxelgrid point cloud
 		vGrid.setInputCloud (cloud);
-		vGrid.setLeafSize (0.05f, 0.05f, 0.05f);
+		vGrid.setLeafSize (0.01f, 0.01f, 0.01f);
 		vGrid.filter (*cloud_filtered);
 		path = filtered_pc_name + to_string(id) + ".pcd";
 		writer.write<pcl::PointXYZRGB> (path, *cloud_filtered, false);
@@ -59,7 +59,7 @@ int main(int argc, char** argv){
 
         //sor voxelgrid point cloud
         vGrid.setInputCloud (cloud_sor);
-        vGrid.setLeafSize (0.05f, 0.05f, 0.05f);
+        vGrid.setLeafSize (0.01f, 0.01f, 0.01f);
         vGrid.filter (*cloud_sor_filtered);
         path = sor_filtered_pc_name + to_string(id) + ".pcd";
         writer.write<pcl::PointXYZRGB> (path, *cloud_sor_filtered, false);
