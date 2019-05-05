@@ -29,7 +29,7 @@ const float FEATURE_RADIUS = 0.08;
 const string FINAL_PATH = "src/turtlebotto/mapping_3d/src/final_cloud.pcd";
 string PCD_FILE_PATH = "";
 pcl::Feature<pcl::PointXYZRGB, pcl::PFHSignature125>::Ptr ft_descriptor (new pcl::PFHEstimation<pcl::PointXYZRGB, pcl::Normal, pcl::PFHSignature125>);
-
+pcl::CorrespondencesPtr ransac_corr(new pcl::Correspondences);
 
 void visualize_keypoints (const pcl::PointCloud<pcl::PointXYZRGB>::Ptr points,
                           const pcl::PointCloud<pcl::PointWithScale>::Ptr keypoints){
@@ -129,7 +129,7 @@ void visualize_correspondences (const pcl::PointCloud<pcl::PointXYZRGB>::Ptr poi
   viz.spin ();
 }
 
-pcl::CorrespondencesPtr correspondences_filter(pcl::PointCloud<pcl::PointWithScale>::Ptr keypoint1,
+void correspondences_filter(pcl::PointCloud<pcl::PointWithScale>::Ptr keypoint1,
                     pcl::PointCloud<pcl::PointWithScale>::Ptr keypoint2, vector<int>& ctnCorrespondences, vector<int>& ntcCorrespondences){
 
 	//boost::shared_ptr<pcl::Correspondences> cor_all (new pcl::Correspondences);
@@ -137,7 +137,7 @@ pcl::CorrespondencesPtr correspondences_filter(pcl::PointCloud<pcl::PointWithSca
 	std::vector<std::pair<unsigned, unsigned>> corr_pair;
 	//pcl::registration::CorrespondenceEstimation<pcl::PFHSignature125, pcl::PFHSignature125> corEst;
 	//pcl::registration::CorrespondenceRejectorSampleConsensus<pcl::PointWithScale> sac;
-	pcl::CorrespondencesPtr ransac_corr(new pcl::Correspondences);
+
 	/*corEst.setInputSource (desc_pfh_1);
 	corEst.setInputTarget (desc_pfh_2);
 	corEst.determineReciprocalCorrespondences (*cor_all);*/
@@ -161,7 +161,6 @@ pcl::CorrespondencesPtr correspondences_filter(pcl::PointCloud<pcl::PointWithSca
     ransac.setInputTarget(keypoint2);
     ransac.setInputCorrespondences(ransac_corr);
     ransac.getCorrespondences(*ransac_corr);
-    return ransac_corr;
 }
 
 void detect_descriptors (pcl::PointCloud<pcl::PointXYZRGB>::Ptr &points,
@@ -308,8 +307,8 @@ int main (int argc, char** argv){
 			}
 			// Compute surface normals
 			std::vector<int> indices;
-			pcl::removeNaNFromPointCloud(*currCloud, *currCloud, indices);
-			pcl::removeNaNFromPointCloud(*nextCloud, *nextCloud, indices);
+			//pcl::removeNaNFromPointCloud(*currCloud, *currCloud, indices);
+			//pcl::removeNaNFromPointCloud(*nextCloud, *nextCloud, indices);
 			// Detect keypoints
 			cout << "Detecting keypoints in " << id << "... " << endl;
 			detect_keypoints(currCloud, currKeypoints);
@@ -331,10 +330,10 @@ int main (int argc, char** argv){
 			find_feature_correspondences (nextDescriptors, currDescriptors, ntcCorrespondences);
 			cout << ctnCorrespondences.size();
 			cout << "Filter feature correspondences" << endl;
-			pcl::CorrespondencesPtr corresp = correspondences_filter(nextKeypoints, currKeypoints,ctnCorrespondences,ntcCorrespondences);
+			correspondences_filter(nextKeypoints, currKeypoints,ctnCorrespondences,ntcCorrespondences);
 
 			pcl::PointCloud<pcl::PointXYZRGB>::Ptr dstCloud (new pcl::PointCloud<pcl::PointXYZRGB>);
-			Eigen::Matrix4f transf_matrix = rigidTransformation(nextKeypoints, currKeypoints, corresp);
+			Eigen::Matrix4f transf_matrix = rigidTransformation(nextKeypoints, currKeypoints, ransac_corr);
 			pcl::transformPointCloud (*nextCloud, *dstCloud, transf_matrix);
 
 			// Applying ICP
