@@ -244,7 +244,7 @@ int main (int argc, char** argv){
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr finalCloud (new pcl::PointCloud<pcl::PointXYZRGB>);
 
     cout << "Created pointcloud variables" << endl;
-    int id = 8;
+    int id = 0;
     string pcd_file_path = "";
 	  string argumento = "";
     string final_path = "src/turtlebotto/mapping_3d/src/final_cloud.pcd";
@@ -277,6 +277,7 @@ int main (int argc, char** argv){
 				cout << "Empty" << endl;
 				break;
 			}
+
 			// Compute surface normals
 			const float normal_radius = 0.03;
 			cout << "Computing normals for " << id << "..." << endl;
