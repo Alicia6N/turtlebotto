@@ -244,9 +244,9 @@ int main (int argc, char** argv){
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr finalCloud (new pcl::PointCloud<pcl::PointXYZRGB>);
 
     cout << "Created pointcloud variables" << endl;
-    int id = 0;
+    int id = 8;
     string pcd_file_path = "";
-	string argumento = "";
+	  string argumento = "";
     string final_path = "src/turtlebotto/mapping_3d/src/final_cloud.pcd";
     if (argc == 2){
         argumento = argv[1];
@@ -272,58 +272,55 @@ int main (int argc, char** argv){
 
 	reader.read<pcl::PointXYZRGB> (pcd_file_path + std::to_string(id) + ".pcd", *currCloud);
     while(ros::ok()){
-		pcl::PointCloud<pcl::PointXYZRGB>::Ptr dstCloud (new pcl::PointCloud<pcl::PointXYZRGB>);
-        //Read two pcd files.
-        //reader.read<pcl::PointXYZRGB> (pcd_file_path + std::to_string(id) + ".pcd", *currCloud);
-		//cout << "Read:" << reader.read<pcl::PointXYZRGB> (pcd_file_path + std::to_string(id+1) + ".pcd", *nextCloud) << endl;
-        if(reader.read<pcl::PointXYZRGB> (pcd_file_path + std::to_string(id+1) + ".pcd", *nextCloud) != 0) {
-          cout << "Empty" << endl;
-          break;
-        }
-        // Compute surface normals
-        const float normal_radius = 0.03;
-        cout << "Computing normals for " << id << "..." << endl;
-        compute_surface_normals (currCloud, normal_radius, currNormals);
-        cout << "Computing normals for " << id+1 << "..." << endl;
-        compute_surface_normals (nextCloud, normal_radius, nextNormals);
+			pcl::PointCloud<pcl::PointXYZRGB>::Ptr dstCloud (new pcl::PointCloud<pcl::PointXYZRGB>);
+      if(reader.read<pcl::PointXYZRGB> (pcd_file_path + std::to_string(id+1) + ".pcd", *nextCloud) != 0) {
+				cout << "Empty" << endl;
+				break;
+			}
+			// Compute surface normals
+			const float normal_radius = 0.03;
+			cout << "Computing normals for " << id << "..." << endl;
+			compute_surface_normals (currCloud, normal_radius, currNormals);
+			cout << "Computing normals for " << id+1 << "..." << endl;
+			compute_surface_normals (nextCloud, normal_radius, nextNormals);
 
-        //visualize_normals (fullCloud, currCloud, currNormals);
+			//visualize_normals (fullCloud, currCloud, currNormals);
 
-        // Detect keypoints
-        cout << "Detecting keypoints in " << id << "... " << endl;
-        detect_keypoints(currCloud, currKeypoints);
-        cout << "Detecting keypoints in " << id+1 << "... " << endl;
-        detect_keypoints(nextCloud, nextKeypoints);
-        
-        // Compute PFH features
-        const float feature_radius = 0.08;
-        cout << "Computing PFH features " << id << "..." << endl;
-        compute_PFH_features_at_keypoints (currCloud, currNormals, currKeypoints, feature_radius, currDescriptors);
-        cout << "Computing PFH features " << id+1 << "..." << endl;
-        compute_PFH_features_at_keypoints (nextCloud, nextNormals, nextKeypoints, feature_radius, nextDescriptors);
-        
-        // Find feature correspondences
-        std::vector<int> correspondences;
-        std::vector<float> correspondence_scores;
-        cout << "Find feature correspondences" << endl;
-        find_feature_correspondences (currDescriptors, nextDescriptors, correspondences, correspondence_scores);
-        cout << "Filter feature correspondences" << endl;
-        //visualize_correspondences (currCloud, currKeypoints, nextCloud, nextKeypoints, correspondences, correspondence_scores);
-        boost::shared_ptr<pcl::Correspondences> corresp = correspondences_filter(currDescriptors, nextDescriptors, currKeypoints, nextKeypoints);
+			// Detect keypoints
+			cout << "Detecting keypoints in " << id << "... " << endl;
+			detect_keypoints(currCloud, currKeypoints);
+			cout << "Detecting keypoints in " << id+1 << "... " << endl;
+			detect_keypoints(nextCloud, nextKeypoints);
+			
+			// Compute PFH features
+			const float feature_radius = 0.08;
+			cout << "Computing PFH features " << id << "..." << endl;
+			compute_PFH_features_at_keypoints (currCloud, currNormals, currKeypoints, feature_radius, currDescriptors);
+			cout << "Computing PFH features " << id+1 << "..." << endl;
+			compute_PFH_features_at_keypoints (nextCloud, nextNormals, nextKeypoints, feature_radius, nextDescriptors);
+			
+			// Find feature correspondences
+			std::vector<int> correspondences;
+			std::vector<float> correspondence_scores;
+			cout << "Find feature correspondences" << endl;
+			find_feature_correspondences (currDescriptors, nextDescriptors, correspondences, correspondence_scores);
+			
+      cout << "Filter feature correspondences" << endl;
+			boost::shared_ptr<pcl::Correspondences> corresp = correspondences_filter(currDescriptors, nextDescriptors, currKeypoints, nextKeypoints);
 
-        Eigen::Matrix4f transf_matrix = rigidTransformation(nextKeypoints, currKeypoints, corresp);
-        pcl::transformPointCloud (*nextCloud, *dstCloud, transf_matrix);
+			Eigen::Matrix4f transf_matrix = rigidTransformation(nextKeypoints, currKeypoints, corresp);
+			pcl::transformPointCloud (*nextCloud, *dstCloud, transf_matrix);
 
-		if(id==0) {
-			*finalCloud = *dstCloud;	
-			*currCloud = *dstCloud;	
-		}
-		else {
-			*finalCloud += *dstCloud;
-			*currCloud = *dstCloud;        
-		}
+			if(id==0) {
+				*finalCloud = *dstCloud;	
+				*currCloud = *dstCloud;	
+			}
+			else {
+				*finalCloud += *dstCloud;
+				*currCloud = *dstCloud;        
+			}
 
-        id++;
+			id++;
     }
     //***************************************************************///
 
