@@ -16,6 +16,9 @@
 #include <pcl/registration/correspondence_estimation.h>
 #include <pcl/registration/correspondence_rejection_sample_consensus.h>
 #include <pcl/registration/transformation_estimation_svd.h>
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+#include <pcl/filters/filter.h>
 using namespace std;
 
 void visualize_keypoints (const pcl::PointCloud<pcl::PointXYZRGB>::Ptr points,
@@ -179,8 +182,10 @@ void find_feature_correspondences (pcl::PointCloud<pcl::PFHSignature125>::Ptr &s
   descriptor_kdtree.setInputCloud (target_descriptors);
   // Find the index of the best match for each keypoint, and store it in "correspondences_out"
   const int k = 1;
+  pcl::PointCloud<pcl::PFHSignature125>::Ptr outputCloud;
   std::vector<int> k_indices (k);
   std::vector<float> k_squared_distances (k);
+
   for (size_t i = 0; i < source_descriptors->size (); ++i){
     descriptor_kdtree.nearestKSearch (*source_descriptors, i, k, k_indices, k_squared_distances);
     correspondences_out[i] = k_indices[0];
@@ -221,7 +226,6 @@ void detect_keypoints(pcl::PointCloud<pcl::PointXYZRGB>::Ptr &points, pcl::Point
 }
 
 Eigen::Matrix4f rigidTransformation(pcl::PointCloud<pcl::PointWithScale>::Ptr &nextKeypoints, pcl::PointCloud<pcl::PointWithScale>::Ptr &currKeypoints, boost::shared_ptr<pcl::Correspondences> &corresp){
-
   Eigen::Matrix4f transform; 
   pcl::registration::TransformationEstimationSVD<pcl::PointWithScale, pcl::PointWithScale> transformSVD;
   transformSVD.estimateRigidTransformation (*nextKeypoints, *currKeypoints, *corresp, transform); 
@@ -280,6 +284,15 @@ int main (int argc, char** argv){
 
 			// Compute surface normals
 			const float normal_radius = 0.03;
+      std::vector<int> indices;
+      std::cout << "Size before removing NANs: " << currCloud->size() << std::endl;
+      pcl::removeNaNFromPointCloud(*currCloud, *currCloud, indices);
+      std::cout << "Size after removing NANs: " << currCloud->size() << std::endl;
+
+      std::cout << "Size before removing NANs: " << nextCloud->size() << std::endl;
+      pcl::removeNaNFromPointCloud(*nextCloud, *nextCloud, indices);
+      std::cout << "Size after removing NANs: " << nextCloud->size() << std::endl;
+
 			cout << "Computing normals for " << id << "..." << endl;
 			compute_surface_normals (currCloud, normal_radius, currNormals);
 			cout << "Computing normals for " << id+1 << "..." << endl;
@@ -296,8 +309,11 @@ int main (int argc, char** argv){
 			// Compute PFH features
 			const float feature_radius = 0.08;
 			cout << "Computing PFH features " << id << "..." << endl;
+      // std::cout << "size: " << source_descriptors->size()  << std::endl;
+
 			compute_PFH_features_at_keypoints (currCloud, currNormals, currKeypoints, feature_radius, currDescriptors);
 			cout << "Computing PFH features " << id+1 << "..." << endl;
+
 			compute_PFH_features_at_keypoints (nextCloud, nextNormals, nextKeypoints, feature_radius, nextDescriptors);
 			
 			// Find feature correspondences
