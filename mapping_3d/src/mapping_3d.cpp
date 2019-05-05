@@ -283,6 +283,15 @@ int main (int argc, char** argv){
 			}
 			// Compute surface normals
 			const float normal_radius = 0.03;
+      std::vector<int> indices;
+      std::cout << "Size before removing NANs: " << currCloud->size() << std::endl;
+      pcl::removeNaNFromPointCloud(*currCloud, *currCloud, indices);
+      std::cout << "Size after removing NANs: " << currCloud->size() << std::endl;
+
+      std::cout << "Size before removing NANs: " << nextCloud->size() << std::endl;
+      pcl::removeNaNFromPointCloud(*nextCloud, *nextCloud, indices);
+      std::cout << "Size after removing NANs: " << nextCloud->size() << std::endl;
+
 			cout << "Computing normals for " << id << "..." << endl;
 			compute_surface_normals (currCloud, normal_radius, currNormals);
 			cout << "Computing normals for " << id+1 << "..." << endl;
@@ -300,15 +309,10 @@ int main (int argc, char** argv){
 			const float feature_radius = 0.08;
 			cout << "Computing PFH features " << id << "..." << endl;
       // std::cout << "size: " << source_descriptors->size()  << std::endl;
-      std::vector<int> indices;
-      std::cout << "Size before removing NANs: " << currCloud->size() << std::endl;
-      pcl::removeNaNFromPointCloud(*currCloud, *currCloud, indices);
-      std::cout << "Size after removing NANs: " << currCloud->size() << std::endl;
+
 			compute_PFH_features_at_keypoints (currCloud, currNormals, currKeypoints, feature_radius, currDescriptors);
 			cout << "Computing PFH features " << id+1 << "..." << endl;
-      std::cout << "size: " << nextCloud->size() << std::endl;
-      pcl::removeNaNFromPointCloud(*nextCloud, *nextCloud, indices);
-      std::cout << "size: " << nextCloud->size() << std::endl;
+
 			compute_PFH_features_at_keypoints (nextCloud, nextNormals, nextKeypoints, feature_radius, nextDescriptors);
 			
 			// Find feature correspondences
