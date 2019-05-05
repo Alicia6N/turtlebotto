@@ -7,6 +7,10 @@
 #include <string>
 #include <iostream>
 #include <cstdlib>
+#include <ctime>
+#include <chrono>
+
+
 using namespace std;
 
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr global_cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
@@ -28,16 +32,19 @@ int main(int argc, char** argv){
 	int i = 0;
 	stringstream ss;
 	string path;
-
+	pcl::PCDWriter writer;
 	while(ros::ok()){
 		ros::spinOnce();
 		try{
 			//original point cloud
+			const auto before = std::chrono::system_clock::now();
 			path = original_pc_name + to_string(i) + ".pcd";
-			pcl::PCDWriter writer;
+
         	writer.write<pcl::PointXYZRGB> (path, *global_cloud, false);
 			cout << path << " file saved.\n";
-			i++;
+			const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()-before);
+			cout << duration.count()/1000.0 << "ms" << endl;
+			++i;
 		} 
 		catch(const std::exception& ex){
 			cout << ex.what() << endl;
