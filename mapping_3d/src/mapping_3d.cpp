@@ -149,38 +149,26 @@ void compute_PFH_features_at_keypoints (pcl::PointCloud<pcl::PointXYZRGB>::Ptr &
                                    pcl::PointCloud<pcl::PFHSignature125>::Ptr &descriptors_out){
   // Create a PFHEstimation object
   pcl::PFHEstimation<pcl::PointXYZRGB, pcl::Normal, pcl::PFHSignature125> pfh_est;
-  // Set it to use a FLANN-based KdTree to perform its neighborhood searches
   pfh_est.setSearchMethod (pcl::search::KdTree<pcl::PointXYZRGB>::Ptr (new pcl::search::KdTree<pcl::PointXYZRGB>));
-  // Specify the radius of the PFH feature
   pfh_est.setRadiusSearch (feature_radius);
-  /* This is a little bit messy: since our keypoint detection returns PointWithScale points, but we want to
-   * use them as an input to our PFH estimation, which expects clouds of PointXYZRGB points.  To get around this,
-   * we'll use copyPointCloud to convert "keypoints" (a cloud of type PointCloud<PointWithScale>) to
-   * "keypoints_xyzrgb" (a cloud of type PointCloud<PointXYZRGB>).  Note that the original cloud doesn't have any RGB
-   * values, so when we copy from PointWithScale to PointXYZRGB, the new r,g,b fields will all be zero.
-   */
-
   pcl::PointCloud<pcl::PointXYZRGB>::Ptr keypoints_xyzrgb (new pcl::PointCloud<pcl::PointXYZRGB>);
   pcl::copyPointCloud (*keypoints, *keypoints_xyzrgb);
-  // Use all of the points for analyzing the local structure of the cloud
   pfh_est.setSearchSurface (points);
   pfh_est.setInputNormals (normals);
-  // But only compute features at the keypoints
   pfh_est.setInputCloud (keypoints_xyzrgb);
-  // Compute the features
   pfh_est.compute (*descriptors_out);
 }
 
 void find_feature_correspondences (pcl::PointCloud<pcl::PFHSignature125>::Ptr &source_descriptors,
                               pcl::PointCloud<pcl::PFHSignature125>::Ptr &target_descriptors,
                               std::vector<int> &correspondences_out, std::vector<float> &correspondence_scores_out){
-  // Resize the output vector
+  
   correspondences_out.resize (source_descriptors->size ());
   correspondence_scores_out.resize (source_descriptors->size ());
-  // Use a KdTree to search for the nearest matches in feature space
+  
   pcl::search::KdTree<pcl::PFHSignature125> descriptor_kdtree;
   descriptor_kdtree.setInputCloud (target_descriptors);
-  // Find the index of the best match for each keypoint, and store it in "correspondences_out"
+  
   const int k = 1;
   pcl::PointCloud<pcl::PFHSignature125>::Ptr outputCloud;
   std::vector<int> k_indices (k);
@@ -248,7 +236,7 @@ int main (int argc, char** argv){
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr finalCloud (new pcl::PointCloud<pcl::PointXYZRGB>);
 
     cout << "Created pointcloud variables" << endl;
-    int id = 0;
+    int id = 3;
     string pcd_file_path = "";
 	  string argumento = "";
     string final_path = "src/turtlebotto/mapping_3d/src/final_cloud.pcd";
