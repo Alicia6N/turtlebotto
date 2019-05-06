@@ -191,13 +191,13 @@ int main (int argc, char** argv){
 
 
 	if(check_arguments(argc,argv)){
-	  ft_descriptor->setKSearch(50);
+		ft_descriptor->setKSearch(50);
 		while(ros::ok()){
-      ros::spinOnce();
+			ros::spinOnce();
 
-      if(!INITIALIZED){
-        currCloud = nextCloud;
-      }
+			if(!INITIALIZED){ 
+				currCloud = nextCloud;
+			}
 			std::vector<int> indices;
 			pcl::removeNaNFromPointCloud(*nextCloud, *nextCloud, indices);
 			// Detect keypoints
@@ -231,15 +231,15 @@ int main (int argc, char** argv){
 			calculate_ICP(dstCloud,transfCloud,currCloud);
 			
 			if(finalCloud->points.size()==0) {
-			  *finalCloud = *transfCloud;
-        *currCloud = *transfCloud;	
+				*finalCloud = *transfCloud;
+				*currCloud = *transfCloud;	
 			}
-      else {
-        *finalCloud += *transfCloud;
-			  *currCloud = *transfCloud;   
-      }
-     
-      INITIALIZED = true;
+			else {
+			    *finalCloud += *transfCloud;
+				*currCloud = *transfCloud;   
+			}
+
+			INITIALIZED = true;
 		}
 	}
     
