@@ -10,6 +10,7 @@
 #include <ros/ros.h>
 #include <pcl_ros/point_cloud.h>
 #include <Eigen/Core>
+#include <pcl/features/pfhrgb.h>
 #include "pcl/kdtree/kdtree_flann.h"
 #include "pcl/features/normal_3d.h"
 #include <pcl/registration/transforms.h>
@@ -28,11 +29,11 @@ const float NORMAL_RADIUS = 0.03;
 const float FEATURE_RADIUS = 0.08;
 const string FINAL_PATH = "src/turtlebotto/mapping_3d/src/final_cloud.pcd";
 string PCD_FILE_PATH = "";
-pcl::Feature<pcl::PointXYZRGB, pcl::PFHSignature125>::Ptr ft_descriptor (new pcl::PFHEstimation<pcl::PointXYZRGB, pcl::Normal, pcl::PFHSignature125>);
+pcl::Feature<pcl::PointXYZRGB, pcl::PFHRGBSignature250>::Ptr ft_descriptor (new pcl::PFHRGBEstimation<pcl::PointXYZRGB, pcl::Normal, pcl::PFHRGBSignature250>);
 pcl::CorrespondencesPtr ransac_corr(new pcl::Correspondences);
 
-void visualize_keypoints (const pcl::PointCloud<pcl::PointXYZRGB>::Ptr points,
-                          const pcl::PointCloud<pcl::PointWithScale>::Ptr keypoints){
+/*void visualize_keypoints (const pcl::PointCloud<pcl::PointXYZRGB>::Ptr points,
+                          const pcl::PointCloud<pcl::PointXYZI>::Ptr keypoints){
   cout << ">>>>> Keypoints detected: " << keypoints->size() << endl;
   // Add the points to the vizualizer
   pcl::visualization::PCLVisualizer viz;
@@ -41,7 +42,7 @@ void visualize_keypoints (const pcl::PointCloud<pcl::PointXYZRGB>::Ptr points,
 
   for (size_t i = 0; i < keypoints->size (); ++i){
     // Get the point data
-    const pcl::PointWithScale & p = keypoints->points[i];
+    const pcl::PointXYZI & p = keypoints->points[i];
     // Pick the radius of the sphere *
     float r =  p.scale;
     // * Note: the scale is given as the standard deviation of a Gaussian blur, so a
@@ -54,7 +55,7 @@ void visualize_keypoints (const pcl::PointCloud<pcl::PointXYZRGB>::Ptr points,
   }
   // Give control over to the visualizer
   viz.spin ();
-}
+}*/
 
 void visualize_normals (const pcl::PointCloud<pcl::PointXYZRGB>::Ptr points,
                         const pcl::PointCloud<pcl::PointXYZRGB>::Ptr normal_points,
@@ -69,18 +70,18 @@ void visualize_normals (const pcl::PointCloud<pcl::PointXYZRGB>::Ptr points,
 }
 
 void visualize_correspondences (const pcl::PointCloud<pcl::PointXYZRGB>::Ptr points1,
-                                const pcl::PointCloud<pcl::PointWithScale>::Ptr keypoints1,
+                                const pcl::PointCloud<pcl::PointXYZI>::Ptr keypoints1,
                                 const pcl::PointCloud<pcl::PointXYZRGB>::Ptr points2,
-                                const pcl::PointCloud<pcl::PointWithScale>::Ptr keypoints2,
+                                const pcl::PointCloud<pcl::PointXYZI>::Ptr keypoints2,
                                 const std::vector<int> &correspondences,
                                 const std::vector<float> &correspondence_scores){
   // We want to visualize two clouds side-by-side, so do to this, we'll make copies of the clouds and transform them
   // by shifting one to the left and the other to the right.  Then we'll draw lines between the corresponding points
   // Create some new point clouds to hold our transformed data
   pcl::PointCloud<pcl::PointXYZRGB>::Ptr points_left (new pcl::PointCloud<pcl::PointXYZRGB>);
-  pcl::PointCloud<pcl::PointWithScale>::Ptr keypoints_left (new pcl::PointCloud<pcl::PointWithScale>);
+  pcl::PointCloud<pcl::PointXYZI>::Ptr keypoints_left (new pcl::PointCloud<pcl::PointXYZI>);
   pcl::PointCloud<pcl::PointXYZRGB>::Ptr points_right (new pcl::PointCloud<pcl::PointXYZRGB>);
-  pcl::PointCloud<pcl::PointWithScale>::Ptr keypoints_right (new pcl::PointCloud<pcl::PointWithScale>);
+  pcl::PointCloud<pcl::PointXYZI>::Ptr keypoints_right (new pcl::PointCloud<pcl::PointXYZI>);
   // Shift the first clouds' points to the left
   //const Eigen::Vector3f translate (0.0, 0.0, 0.3);
   const Eigen::Vector3f translate (0.4, 0.0, 0.0);
@@ -107,8 +108,8 @@ void visualize_correspondences (const pcl::PointCloud<pcl::PointXYZRGB>::Ptr poi
     }
     kpsize++;
     // Get the pair of points
-    const pcl::PointWithScale & p_left = keypoints_left->points[i];
-    const pcl::PointWithScale & p_right = keypoints_right->points[correspondences[i]];
+    const pcl::PointXYZI & p_left = keypoints_left->points[i];
+    const pcl::PointXYZI & p_right = keypoints_right->points[correspondences[i]];
     // Generate a random (bright) color
     double r = (rand() % 100);
     double g = (rand() % 100);
@@ -129,26 +130,27 @@ void visualize_correspondences (const pcl::PointCloud<pcl::PointXYZRGB>::Ptr poi
   viz.spin ();
 }
 
-void correspondences_filter(pcl::PointCloud<pcl::PointWithScale>::Ptr keypoint1,
-                    pcl::PointCloud<pcl::PointWithScale>::Ptr keypoint2, vector<int>& ctnCorrespondences, vector<int>& ntcCorrespondences){
+void correspondences_filter(pcl::PointCloud<pcl::PointXYZI>::Ptr keypoint1,
+                    pcl::PointCloud<pcl::PointXYZI>::Ptr keypoint2, vector<int>& ctnCorrespondences, vector<int>& ntcCorrespondences){
 
 	//boost::shared_ptr<pcl::Correspondences> cor_all (new pcl::Correspondences);
 	//boost::shared_ptr<pcl::Correspondences> cor_inliers (new pcl::Correspondences);
 	std::vector<std::pair<unsigned, unsigned>> corr_pair;
-	//pcl::registration::CorrespondenceEstimation<pcl::PFHSignature125, pcl::PFHSignature125> corEst;
-	//pcl::registration::CorrespondenceRejectorSampleConsensus<pcl::PointWithScale> sac;
+	//pcl::registration::CorrespondenceEstimation<pcl::PFHRGBSignature250, pcl::PFHRGBSignature250> corEst;
+	//pcl::registration::CorrespondenceRejectorSampleConsensus<pcl::PointXYZI> sac;
 
 	/*corEst.setInputSource (desc_pfh_1);
 	corEst.setInputTarget (desc_pfh_2);
 	corEst.determineReciprocalCorrespondences (*cor_all);*/
-
-	 for (unsigned i = 0; i < ntcCorrespondences.size (); ++i) {
-        if (ctnCorrespondences[ntcCorrespondences[i]] == i) {
-            corr_pair.push_back(std::make_pair(i, ntcCorrespondences[i]));
+  cout << "Correspondences found: " << ctnCorrespondences.size() << "\n";
+	 for (unsigned i = 0; i < ctnCorrespondences.size (); ++i) {
+        if (ntcCorrespondences[ctnCorrespondences[i]] == i) {
+            corr_pair.push_back(std::make_pair(i, ctnCorrespondences[i]));
         }
     }
 
     ransac_corr->resize (corr_pair.size());
+    cout << "Pair of correspondences: " << corr_pair.size() << "\n";
     for (unsigned i = 0; i < corr_pair.size(); ++i)
     {
         (*ransac_corr)[i].index_query = corr_pair[i].first;
@@ -156,7 +158,7 @@ void correspondences_filter(pcl::PointCloud<pcl::PointWithScale>::Ptr keypoint1,
     }
 
     
-    pcl::registration::CorrespondenceRejectorSampleConsensus<pcl::PointWithScale> ransac;
+    pcl::registration::CorrespondenceRejectorSampleConsensus<pcl::PointXYZI> ransac;
     ransac.setInputSource(keypoint1);
     ransac.setInputTarget(keypoint2);
     ransac.setInputCorrespondences(ransac_corr);
@@ -164,10 +166,10 @@ void correspondences_filter(pcl::PointCloud<pcl::PointWithScale>::Ptr keypoint1,
 }
 
 void detect_descriptors (pcl::PointCloud<pcl::PointXYZRGB>::Ptr &points,
-                                   pcl::PointCloud<pcl::PointWithScale>::Ptr &keypoints,
-                                   pcl::PointCloud<pcl::PFHSignature125>::Ptr &descriptors_out){
-  // Create a PFHEstimation object
-  /*pcl::PFHEstimation<pcl::PointXYZRGB, pcl::Normal, pcl::PFHSignature125> pfh_est;
+                                   pcl::PointCloud<pcl::PointXYZI>::Ptr &keypoints,
+                                   pcl::PointCloud<pcl::PFHRGBSignature250>::Ptr &descriptors_out){
+  // Create a PFHRGBEstimation object
+  /*pcl::PFHRGBEstimation<pcl::PointXYZRGB, pcl::Normal, pcl::PFHRGBSignature250> pfh_est;
   // Set it to use a FLANN-based KdTree to perform its neighborhood searches
   pfh_est.setSearchMethod (pcl::search::KdTree<pcl::PointXYZRGB>::Ptr (new pcl::search::KdTree<pcl::PointXYZRGB>));
   // Specify the radius of the PFH feature
@@ -178,17 +180,17 @@ void detect_descriptors (pcl::PointCloud<pcl::PointXYZRGB>::Ptr &points,
   pfh_est.setInputNormals (normals);
   pfh_est.setInputCloud (keypoints_xyzrgb);
   pfh_est.compute (*descriptors_out);*/
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr keypoints_xyzrgb(new pcl::PointCloud<pcl::PointXYZRGB>);
+   	pcl::PointCloud<pcl::PointXYZRGB>::Ptr keypoints_xyzrgb(new pcl::PointCloud<pcl::PointXYZRGB>);
     keypoints_xyzrgb->points.resize(keypoints->points.size());
 
     // We need to transfer the type
     pcl::copyPointCloud(*keypoints, *keypoints_xyzrgb);
 
     // Try to cast its type 
-    pcl::FeatureFromNormals<pcl::PointXYZRGB, pcl::Normal, pcl::PFHSignature125>::Ptr nm_ft = boost::dynamic_pointer_cast<pcl::FeatureFromNormals<pcl::PointXYZRGB, pcl::Normal, pcl::PFHSignature125>> (ft_descriptor);
+    pcl::FeatureFromNormals<pcl::PointXYZRGB, pcl::Normal, pcl::PFHRGBSignature250>::Ptr nm_ft = boost::dynamic_pointer_cast<pcl::FeatureFromNormals<pcl::PointXYZRGB, pcl::Normal, pcl::PFHRGBSignature250>> (ft_descriptor);
 
     // Setting main descriptor properties
-	ft_descriptor->setKSearch(50);
+
     ft_descriptor->setSearchSurface(points);
     ft_descriptor->setInputCloud(keypoints_xyzrgb);
 
@@ -206,15 +208,14 @@ void detect_descriptors (pcl::PointCloud<pcl::PointXYZRGB>::Ptr &points,
     ft_descriptor->compute(*descriptors_out);
 }
 
-void find_feature_correspondences (pcl::PointCloud<pcl::PFHSignature125>::Ptr &source_descriptors,
-                              pcl::PointCloud<pcl::PFHSignature125>::Ptr &target_descriptors,
+void find_feature_correspondences (pcl::PointCloud<pcl::PFHRGBSignature250>::Ptr &source_descriptors,
+                              pcl::PointCloud<pcl::PFHRGBSignature250>::Ptr &target_descriptors,
                               std::vector<int> &correspondences_out){
 
   correspondences_out.resize (source_descriptors->size ());
-  pcl::search::KdTree<pcl::PFHSignature125> descriptor_kdtree;
+  pcl::KdTreeFLANN<pcl::PFHRGBSignature250> descriptor_kdtree;
   descriptor_kdtree.setInputCloud (target_descriptors);
   const int k = 1;
-  pcl::PointCloud<pcl::PFHSignature125>::Ptr outputCloud;
   std::vector<int> k_indices (k);
   std::vector<float> k_squared_distances (k);
 
@@ -224,18 +225,9 @@ void find_feature_correspondences (pcl::PointCloud<pcl::PFHSignature125>::Ptr &s
   }
 }
 
-void compute_surface_normals (pcl::PointCloud<pcl::PointXYZRGB>::Ptr &points,
-                         pcl::PointCloud<pcl::Normal>::Ptr &normals_out){
 
-  pcl::NormalEstimation<pcl::PointXYZRGB, pcl::Normal> norm_est;
-  norm_est.setSearchMethod (pcl::search::KdTree<pcl::PointXYZRGB>::Ptr (new pcl::search::KdTree<pcl::PointXYZRGB>));
-  norm_est.setRadiusSearch (NORMAL_RADIUS);
-  norm_est.setInputCloud (points);
-  norm_est.compute (*normals_out);
-}
-
-void detect_keypoints(pcl::PointCloud<pcl::PointXYZRGB>::Ptr &points, pcl::PointCloud<pcl::PointWithScale>::Ptr &keypoints){
-    pcl::SIFTKeypoint<pcl::PointXYZRGB, pcl::PointWithScale> sift;
+void detect_keypoints(pcl::PointCloud<pcl::PointXYZRGB>::Ptr &points, pcl::PointCloud<pcl::PointXYZI>::Ptr &keypoints){
+    pcl::SIFTKeypoint<pcl::PointXYZRGB, pcl::PointXYZI> sift;
     sift.setSearchMethod(pcl::search::KdTree<pcl::PointXYZRGB>::Ptr (new pcl::search::KdTree<pcl::PointXYZRGB>));
     const float min_scale = 0.01f;
     const int nr_octaves = 3;
@@ -246,12 +238,13 @@ void detect_keypoints(pcl::PointCloud<pcl::PointXYZRGB>::Ptr &points, pcl::Point
     sift.setInputCloud(points);
     sift.setSearchSurface(points);
     sift.compute(*keypoints);
+    cout << "Detected keypoints: " << keypoints->size() << "\n";
     //visualize_keypoints(points,keypoints);
 }
 
-Eigen::Matrix4f rigidTransformation(pcl::PointCloud<pcl::PointWithScale>::Ptr &nextKeypoints, pcl::PointCloud<pcl::PointWithScale>::Ptr &currKeypoints, boost::shared_ptr<pcl::Correspondences> &corresp){
+Eigen::Matrix4f rigidTransformation(pcl::PointCloud<pcl::PointXYZI>::Ptr &nextKeypoints, pcl::PointCloud<pcl::PointXYZI>::Ptr &currKeypoints, boost::shared_ptr<pcl::Correspondences> &corresp){
   Eigen::Matrix4f transform; 
-  pcl::registration::TransformationEstimationSVD<pcl::PointWithScale, pcl::PointWithScale> transformSVD;
+  pcl::registration::TransformationEstimationSVD<pcl::PointXYZI, pcl::PointXYZI> transformSVD;
   transformSVD.estimateRigidTransformation (*nextKeypoints, *currKeypoints, *corresp, transform); 
   return transform;
 }
@@ -280,17 +273,29 @@ bool check_arguments(int argc, char** argv){
     }
 
 }
+const string filtered_pc_name = "src/turtlebotto/get_pointclouds/src/pcd_files/filtered/filtered_pcd_";
+void callback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& msg){
+  pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZRGB>(*msg));
+  pcl::VoxelGrid<pcl::PointXYZRGB> vGrid;
+  vGrid.setInputCloud (cloud);
+  vGrid.setLeafSize (0.05f, 0.05f, 0.05f);
+  vGrid.filter (*cloud);
+
+    //path = filtered_pc_name + to_string(id) + ".pcd";
+		//writer.write<pcl::PointXYZRGB> (path, *cloud_filtered, false);
+		//cout << "Points after VoxelGrid: " << cloud_filtered->size() << "\n";
+}
 
 int main (int argc, char** argv){
     ros::init(argc, argv, "mapping_3d_node");
+    ros::NodeHandle nh;
+    ros::Subscriber sub = nh.subscribe<pcl::PointCloud<pcl::PointXYZRGB>>("/camera/depth/point",1,callback);
 	   
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr currCloud (new pcl::PointCloud<pcl::PointXYZRGB>);
-    pcl::PointCloud<pcl::PointWithScale>::Ptr currKeypoints (new pcl::PointCloud<pcl::PointWithScale>);
-    pcl::PointCloud<pcl::PFHSignature125>::Ptr currDescriptors (new pcl::PointCloud<pcl::PFHSignature125>);
+    pcl::PointCloud<pcl::PointXYZI>::Ptr currKeypoints (new pcl::PointCloud<pcl::PointXYZI>);
+    pcl::PointCloud<pcl::PFHRGBSignature250>::Ptr currDescriptors (new pcl::PointCloud<pcl::PFHRGBSignature250>);
 
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr nextCloud (new pcl::PointCloud<pcl::PointXYZRGB>);
-    pcl::PointCloud<pcl::PointWithScale>::Ptr nextKeypoints (new pcl::PointCloud<pcl::PointWithScale>);
-    pcl::PointCloud<pcl::PFHSignature125>::Ptr nextDescriptors (new pcl::PointCloud<pcl::PFHSignature125>);
+
 
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr finalCloud (new pcl::PointCloud<pcl::PointXYZRGB>);
 
@@ -299,16 +304,20 @@ int main (int argc, char** argv){
 	if(check_arguments(argc,argv)){
 		cout << "PCD flags set" << endl;
 		pcl::PCDReader reader; 
-
+	  ft_descriptor->setKSearch(50);
 		reader.read<pcl::PointXYZRGB> (PCD_FILE_PATH + std::to_string(id) + ".pcd", *currCloud);
 		while(ros::ok()){
+      //ros::spinOnce();
+      pcl::PointCloud<pcl::PointXYZRGB>::Ptr nextCloud (new pcl::PointCloud<pcl::PointXYZRGB>);
+      pcl::PointCloud<pcl::PointXYZI>::Ptr nextKeypoints (new pcl::PointCloud<pcl::PointXYZI>);
+      pcl::PointCloud<pcl::PFHRGBSignature250>::Ptr nextDescriptors (new pcl::PointCloud<pcl::PFHRGBSignature250>);
 			if(reader.read<pcl::PointXYZRGB> (PCD_FILE_PATH + std::to_string(id+1) + ".pcd", *nextCloud) != 0) {
 				break;
 			}
 			// Compute surface normals
 			std::vector<int> indices;
-			//pcl::removeNaNFromPointCloud(*currCloud, *currCloud, indices);
-			//pcl::removeNaNFromPointCloud(*nextCloud, *nextCloud, indices);
+			pcl::removeNaNFromPointCloud(*currCloud, *currCloud, indices);
+			pcl::removeNaNFromPointCloud(*nextCloud, *nextCloud, indices);
 			// Detect keypoints
 			cout << "Detecting keypoints in " << id << "... " << endl;
 			detect_keypoints(currCloud, currKeypoints);
@@ -330,11 +339,11 @@ int main (int argc, char** argv){
 			find_feature_correspondences (nextDescriptors, currDescriptors, ntcCorrespondences);
 			cout << ctnCorrespondences.size();
 			cout << "Filter feature correspondences" << endl;
-			correspondences_filter(nextKeypoints, currKeypoints,ctnCorrespondences,ntcCorrespondences);
+			correspondences_filter(currKeypoints, nextKeypoints,ctnCorrespondences,ntcCorrespondences);
 
 			pcl::PointCloud<pcl::PointXYZRGB>::Ptr dstCloud (new pcl::PointCloud<pcl::PointXYZRGB>);
-			Eigen::Matrix4f transf_matrix = rigidTransformation(nextKeypoints, currKeypoints, ransac_corr);
-			pcl::transformPointCloud (*nextCloud, *dstCloud, transf_matrix);
+			Eigen::Matrix4f transf_matrix = rigidTransformation(currKeypoints, nextKeypoints, ransac_corr);
+			pcl::transformPointCloud (*currCloud, *dstCloud, transf_matrix);
 
 			// Applying ICP
 			pcl::PointCloud<pcl::PointXYZRGB>::Ptr final_transformed_cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
@@ -342,7 +351,7 @@ int main (int argc, char** argv){
 			registration->setInputSource(dstCloud);
 			registration->setInputTarget(currCloud);
 			registration->setMaxCorrespondenceDistance(0.05);
-			registration->setRANSACOutlierRejectionThreshold (0.001);
+			registration->setRANSACOutlierRejectionThreshold (0.05);
 			registration->setTransformationEpsilon (0.000001);
 			registration->setMaximumIterations (1000);
 			registration->align(*final_transformed_cloud);
