@@ -24,7 +24,6 @@ void simpleVis (){
 
 int main(int argc, char** argv){
 	ros::init(argc, argv, "pcl_viewer");
-	ros::NodeHandle nh;
 	boost::thread t(simpleVis);
 
 	string pcd_file_path = "";
@@ -68,7 +67,6 @@ int main(int argc, char** argv){
 
 	bool name = false;
 	if(argc>=2){
-		ros::spinOnce();
 		stringstream ss;
 		ss <<  pcd_file_path << ".pcd";
 		string path = ss.str();
