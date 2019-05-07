@@ -1,273 +1,299 @@
-#include <iostream>
-#include <pcl/io/pcd_io.h>
-#include <pcl/point_types.h>
-#include <pcl/filters/voxel_grid.h>
-#include "pcl/keypoints/sift_keypoint.h"
-#include "pcl/features/pfh.h"
-#include <pcl/visualization/pcl_visualizer.h>
-#include <pcl/visualization/cloud_viewer.h>
-#include <string>
-#include <sstream>
+#pragma once
+
 #include <ros/ros.h>
 #include <pcl_ros/point_cloud.h>
-#include <Eigen/Core>
+#include <boost/foreach.hpp>
+#include <pcl/visualization/cloud_viewer.h>
+#include <pcl/filters/statistical_outlier_removal.h>
+#include <pcl/keypoints/sift_keypoint.h>
+#include <pcl/keypoints/harris_3d.h>
+#include <pcl/filters/voxel_grid.h>
 #include <pcl/features/pfhrgb.h>
-#include "pcl/kdtree/kdtree_flann.h"
-#include "pcl/features/normal_3d.h"
-#include <pcl/registration/transforms.h>
-#include <pcl/registration/correspondence_estimation.h>
-#include <pcl/registration/correspondence_rejection_sample_consensus.h>
-#include <pcl/registration/transformation_estimation_svd.h>
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
-#include <pcl/filters/filter.h>
+#include <pcl/features/normal_3d.h>
 #include <pcl/registration/icp.h>
 #include <pcl/registration/correspondence_rejection_sample_consensus.h>
 #include <pcl/registration/transformation_estimation_svd.h>
 using namespace std;
+using PointCloudXYZRGB = pcl::PointCloud<pcl::PointXYZRGB>;
+using PointCloudXYZI = pcl::PointCloud<pcl::PointXYZI>;
+using PFHRGBSign250 = pcl::PointCloud<pcl::PFHRGBSignature250>;
 
-const float NORMAL_RADIUS = 0.03;
-const float FEATURE_RADIUS = 0.08;
-const string FINAL_PATH = "src/turtlebotto/mapping_3d/src/final_cloud.pcd";
+//Parametros globales
+string ARGUMENTO_PCL;
+string ARGUMENTO_KP;
 bool INITIALIZED = false;
-string PCD_FILE_PATH = "";
-pcl::Feature<pcl::PointXYZRGB, pcl::PFHRGBSignature250>::Ptr ft_descriptor (new pcl::PFHRGBEstimation<pcl::PointXYZRGB, pcl::Normal, pcl::PFHRGBSignature250>);
+
+PointCloudXYZRGB::Ptr prevCloud (new PointCloudXYZRGB);
+PointCloudXYZRGB::Ptr currCloud (new PointCloudXYZRGB);
+PointCloudXYZRGB::Ptr finalCloud (new PointCloudXYZRGB);
+
+pcl::Feature<pcl::PointXYZRGB, pcl::PFHRGBSignature250>::Ptr descriptor_detector (new pcl::PFHRGBEstimation<pcl::PointXYZRGB, pcl::Normal, pcl::PFHRGBSignature250>);
+boost::shared_ptr<pcl::Keypoint<pcl::PointXYZRGB, pcl::PointXYZI>> keypoint_detector;
+
 pcl::CorrespondencesPtr ransac_corr(new pcl::Correspondences);
 
-pcl::PointCloud<pcl::PointXYZRGB>::Ptr nextCloud (new pcl::PointCloud<pcl::PointXYZRGB>);
-pcl::PointCloud<pcl::PointXYZI>::Ptr nextKeypoints (new pcl::PointCloud<pcl::PointXYZI>);
-pcl::PointCloud<pcl::PFHRGBSignature250>::Ptr nextDescriptors (new pcl::PointCloud<pcl::PFHRGBSignature250>);
-
-pcl::PointCloud<pcl::PointXYZRGB>::Ptr finalCloud (new pcl::PointCloud<pcl::PointXYZRGB>);
-
 void simpleVis (){
-  	pcl::visualization::CloudViewer viewer ("Simple Cloud Viewer");
+  	pcl::visualization::CloudViewer viewer("Simple Cloud Viewer");
 	while(!viewer.wasStopped()){
-	  viewer.showCloud (finalCloud);
-	  boost::this_thread::sleep(boost::posix_time::milliseconds(1000));
+		viewer.showCloud(finalCloud);
+		boost::this_thread::sleep(boost::posix_time::milliseconds(1000));
 	}
 }
 
-void correspondences_filter(pcl::PointCloud<pcl::PointXYZI>::Ptr keypoint1,
-                    pcl::PointCloud<pcl::PointXYZI>::Ptr keypoint2, vector<int>& ctnCorrespondences, vector<int>& ntcCorrespondences){
+void compute_keypoints(PointCloudXYZRGB::ConstPtr source, PointCloudXYZI::Ptr keypoints){
+	if (ARGUMENTO_KP == "--s3d"){
+		//sift3d
+		pcl::SIFTKeypoint<pcl::PointXYZRGB, pcl::PointXYZI>* sift = new pcl::SIFTKeypoint<pcl::PointXYZRGB, pcl::PointXYZI>;
+		pcl::search::KdTree<pcl::PointXYZRGB>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZRGB> ());
+		sift->setSearchMethod(tree);
+		sift->setScales(0.01, 3, 2);
+		sift->setMinimumContrast(0.0);
+		keypoint_detector.reset(sift);
+	}
+	else if (ARGUMENTO_KP == "--h3d"){
+		//harris3d
+		pcl::HarrisKeypoint3D<pcl::PointXYZRGB,pcl::PointXYZI>* harris3D = new pcl::HarrisKeypoint3D<pcl::PointXYZRGB,pcl::PointXYZI> (pcl::HarrisKeypoint3D<pcl::PointXYZRGB,pcl::PointXYZI>::HARRIS);
+		harris3D->setNonMaxSupression(true);
+		harris3D->setRadius (0.01);
+		harris3D->setRadiusSearch (0.01);
+		keypoint_detector.reset(harris3D);
+	}
+	
+	keypoint_detector->setInputCloud(source);
+	keypoint_detector->setSearchSurface(source);
+	keypoint_detector->compute(*keypoints);
+}
+
+void compute_descriptors(PointCloudXYZRGB::ConstPtr source, PointCloudXYZI::Ptr keypoints, PFHRGBSign250::Ptr features) {
+	PointCloudXYZRGB::Ptr keypoints_xyzrgb(new PointCloudXYZRGB);
+	keypoints_xyzrgb->points.resize(keypoints->points.size());
+
+	pcl::copyPointCloud(*keypoints, *keypoints_xyzrgb);
+
+	pcl::FeatureFromNormals<pcl::PointXYZRGB, pcl::Normal, pcl::PFHRGBSignature250>::Ptr nm_ft = boost::dynamic_pointer_cast<pcl::FeatureFromNormals<pcl::PointXYZRGB, pcl::Normal, pcl::PFHRGBSignature250>> (descriptor_detector);
+
+	
+
+	if (nm_ft){
+		pcl::PointCloud<pcl::Normal>::Ptr normals (new  pcl::PointCloud<pcl::Normal>);
+		pcl::NormalEstimation<pcl::PointXYZRGB, pcl::Normal> nm_est;
+		nm_est.setSearchMethod (pcl::search::Search<pcl::PointXYZRGB>::Ptr (new pcl::search::KdTree<pcl::PointXYZRGB>));
+		nm_est.setRadiusSearch (0.01);
+		nm_est.setInputCloud (source);
+		nm_est.compute (*normals);
+		nm_ft->setInputNormals(normals);
+	}
+
+	descriptor_detector->setKSearch(50);
+	descriptor_detector->setSearchSurface(source);
+	descriptor_detector->setInputCloud(keypoints_xyzrgb);
+	descriptor_detector->compute(*features);
+}
+
+void find_feature_correspondences(PFHRGBSign250::Ptr source, PFHRGBSign250::Ptr target, std::vector<int>& correspondences){
+  	correspondences.resize(source->size());
+	pcl::KdTreeFLANN<pcl::PFHRGBSignature250> descriptor_kdtree;
+	descriptor_kdtree.setInputCloud(target);
+
+	const int k = 1;
+	std::vector<int> k_indices(k);
+	std::vector<float> k_squared_distances(k);
+	for (size_t i = 0; i < source->size (); ++i) {
+		descriptor_kdtree.nearestKSearch(*source, i, k, k_indices, k_squared_distances);
+		correspondences[i] = k_indices[0];
+	}
+}
+
+
+void filter_correspondences(PointCloudXYZI::Ptr source_kp, PointCloudXYZI::Ptr target_kp,
+							std::vector<int>& st_correspondences, std::vector<int>& ts_correspondences) {
 	std::vector<std::pair<unsigned, unsigned>> corr_pair;
-  cout << "Correspondences found: " << ctnCorrespondences.size() << "\n";
-	 for (unsigned i = 0; i < ctnCorrespondences.size (); ++i) {
-        if (ntcCorrespondences[ctnCorrespondences[i]] == i) {
-            corr_pair.push_back(std::make_pair(i, ctnCorrespondences[i]));
-        }
-    }
+	
+	for (unsigned i = 0; i < st_correspondences.size (); ++i) {
+		if (ts_correspondences[st_correspondences[i]] == i) {
+			corr_pair.push_back(std::make_pair(i, st_correspondences[i]));
+		}
+	}
 
-    ransac_corr->resize (corr_pair.size());
-    cout << "Pair of correspondences: " << corr_pair.size() << "\n";
-    for (unsigned i = 0; i < corr_pair.size(); ++i)
-    {
-        (*ransac_corr)[i].index_query = corr_pair[i].first;
-        (*ransac_corr)[i].index_match = corr_pair[i].second;
-    }
+	ransac_corr->resize (corr_pair.size());
+	for (unsigned i = 0; i < corr_pair.size(); ++i){
+		(*ransac_corr)[i].index_query = corr_pair[i].first;
+		(*ransac_corr)[i].index_match = corr_pair[i].second;
+	}
 
-    
-    pcl::registration::CorrespondenceRejectorSampleConsensus<pcl::PointXYZI> ransac;
-    ransac.setInputSource(keypoint1);
-    ransac.setInputTarget(keypoint2);
-    ransac.setInputCorrespondences(ransac_corr);
-    ransac.getCorrespondences(*ransac_corr);
+	pcl::registration::CorrespondenceRejectorSampleConsensus<pcl::PointXYZI> ransac;
+	ransac.setInputSource(source_kp);
+	ransac.setInputTarget(target_kp);
+	ransac.setInputCorrespondences(ransac_corr);
+	ransac.getCorrespondences(*ransac_corr);
 }
 
-void detect_descriptors (pcl::PointCloud<pcl::PointXYZRGB>::Ptr &points,
-                                   pcl::PointCloud<pcl::PointXYZI>::Ptr &keypoints,
-                                   pcl::PointCloud<pcl::PFHRGBSignature250>::Ptr &descriptors_out){
-   	pcl::PointCloud<pcl::PointXYZRGB>::Ptr keypoints_xyzrgb(new pcl::PointCloud<pcl::PointXYZRGB>);
-    keypoints_xyzrgb->points.resize(keypoints->points.size());
-
-    // We need to transfer the type
-    pcl::copyPointCloud(*keypoints, *keypoints_xyzrgb);
-
-    // Try to cast its type 
-    pcl::FeatureFromNormals<pcl::PointXYZRGB, pcl::Normal, pcl::PFHRGBSignature250>::Ptr nm_ft = boost::dynamic_pointer_cast<pcl::FeatureFromNormals<pcl::PointXYZRGB, pcl::Normal, pcl::PFHRGBSignature250>> (ft_descriptor);
-
-    // Setting main descriptor properties
-
-    ft_descriptor->setSearchSurface(points);
-    ft_descriptor->setInputCloud(keypoints_xyzrgb);
-
-    if (nm_ft)
-      {
-        pcl::PointCloud<pcl::Normal>::Ptr normals (new  pcl::PointCloud<pcl::Normal>);
-        pcl::NormalEstimation<pcl::PointXYZRGB, pcl::Normal> nm_est;
-        nm_est.setSearchMethod (pcl::search::Search<pcl::PointXYZRGB>::Ptr (new pcl::search::KdTree<pcl::PointXYZRGB>));
-        nm_est.setRadiusSearch (0.01);
-        nm_est.setInputCloud (points);
-        nm_est.compute (*normals);
-        nm_ft->setInputNormals(normals);
-    }
-
-    ft_descriptor->compute(*descriptors_out);
-}
-
-void find_feature_correspondences (pcl::PointCloud<pcl::PFHRGBSignature250>::Ptr &source_descriptors,
-                              pcl::PointCloud<pcl::PFHRGBSignature250>::Ptr &target_descriptors,
-                              std::vector<int> &correspondences_out){
-
-  correspondences_out.resize (source_descriptors->size ());
-  pcl::KdTreeFLANN<pcl::PFHRGBSignature250> descriptor_kdtree;
-  descriptor_kdtree.setInputCloud (target_descriptors);
-  const int k = 1;
-  std::vector<int> k_indices (k);
-  std::vector<float> k_squared_distances (k);
-
-  for (size_t i = 0; i < source_descriptors->size (); ++i){
-    descriptor_kdtree.nearestKSearch (*source_descriptors, i, k, k_indices, k_squared_distances);
-    correspondences_out[i] = k_indices[0];
-  }
-}
-
-
-void detect_keypoints(pcl::PointCloud<pcl::PointXYZRGB>::Ptr &points, pcl::PointCloud<pcl::PointXYZI>::Ptr &keypoints){
-    pcl::SIFTKeypoint<pcl::PointXYZRGB, pcl::PointXYZI> sift;
-    sift.setSearchMethod(pcl::search::KdTree<pcl::PointXYZRGB>::Ptr (new pcl::search::KdTree<pcl::PointXYZRGB>));
-    const float min_scale = 0.01f;
-    const int nr_octaves = 3;
-    const int nr_scales_per_octave = 2;
-    const float min_contrast = 0.0;
-    sift.setScales(min_scale,nr_octaves,nr_scales_per_octave);
-    sift.setMinimumContrast(min_contrast);
-    sift.setInputCloud(points);
-    sift.setSearchSurface(points);
-    sift.compute(*keypoints);
-    cout << "Detected keypoints: " << keypoints->size() << "\n";
-    //visualize_keypoints(points,keypoints);
-}
-
-Eigen::Matrix4f rigidTransformation(pcl::PointCloud<pcl::PointXYZI>::Ptr &nextKeypoints, pcl::PointCloud<pcl::PointXYZI>::Ptr &currKeypoints, boost::shared_ptr<pcl::Correspondences> &corresp){
-  Eigen::Matrix4f transform; 
-  pcl::registration::TransformationEstimationSVD<pcl::PointXYZI, pcl::PointXYZI> transformSVD;
-  transformSVD.estimateRigidTransformation (*nextKeypoints, *currKeypoints, *corresp, transform); 
-  return transform;
-}
-
-bool check_arguments(int argc, char** argv){
-	string argumento = "";
-
-    if (argc == 2){
-        argumento = argv[1];
-        if (argumento == "--o")
-            PCD_FILE_PATH = "src/turtlebotto/get_pointclouds/src/pcd_files/original/pcd_";
-        else if (argumento == "--s")
-            PCD_FILE_PATH = "src/turtlebotto/get_pointclouds/src/pcd_files/sor/sor_pcd_";
-        else if (argumento == "--sv")
-            PCD_FILE_PATH = "src/turtlebotto/get_pointclouds/src/pcd_files/sor_filtered/sor_filtered_pcd_";
-        else if (argumento == "--v")
-            PCD_FILE_PATH = "src/turtlebotto/get_pointclouds/src/pcd_files/filtered/filtered_pcd_";
-		return true;
-    }
-    else{
-			cout << argc;
-			string usage = "{--o (Original pcds) | --s (SOR pcds) | --v (VoxelGrid pcds)}";
-			cout << "Incorrect program use! Usage must be: " << endl;
-			cout << "rosrun *package_name* *executable_name* " << usage << endl;
-			return false;
-    }
-
-}
-void callback(const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr& msg){
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZRGB>(*msg));
-	pcl::VoxelGrid<pcl::PointXYZRGB> vGrid;
-	vGrid.setInputCloud (cloud);
-	vGrid.setLeafSize (0.05f, 0.05f, 0.05f);
-	vGrid.filter (*cloud);
-	cout << "Voxel grid applied" << endl;
-	std::vector<int> indices;
-	cloud->is_dense = false;
-	pcl::removeNaNFromPointCloud(*cloud, *cloud, indices);
-	nextCloud = cloud;
-}
-void calculate_ICP(pcl::PointCloud<pcl::PointXYZRGB>::Ptr &dstCloud,pcl::PointCloud<pcl::PointXYZRGB>::Ptr &final_cloud,pcl::PointCloud<pcl::PointXYZRGB>::Ptr currCloud){
+void calculate_ICP(PointCloudXYZRGB::Ptr &dstCloud, PointCloudXYZRGB::Ptr prevCloud, PointCloudXYZRGB::Ptr &finalCloud){
+	PointCloudXYZRGB::Ptr final_transformed_cloud(new PointCloudXYZRGB);
 	pcl::Registration<pcl::PointXYZRGB, pcl::PointXYZRGB>::Ptr registration (new pcl::IterativeClosestPoint<pcl::PointXYZRGB, pcl::PointXYZRGB>);
 	registration->setInputSource(dstCloud);
-	registration->setInputTarget(currCloud);
+	registration->setInputTarget(prevCloud);
 	registration->setMaxCorrespondenceDistance(0.05);
 	registration->setRANSACOutlierRejectionThreshold (0.05);
 	registration->setTransformationEpsilon (0.000001);
 	registration->setMaximumIterations (1000);
-	registration->align(*final_cloud);
-  
+	registration->align(*finalCloud);
 }
-int main (int argc, char** argv){
-    ros::init(argc, argv, "mapping_3d_node");
-	boost::thread t(simpleVis);
-    ros::NodeHandle nh;
-    ros::Subscriber sub = nh.subscribe<pcl::PointCloud<pcl::PointXYZRGB>>("/camera/depth/points",1,callback);
-	   
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr currCloud (new pcl::PointCloud<pcl::PointXYZRGB>);
-    pcl::PointCloud<pcl::PointXYZI>::Ptr currKeypoints (new pcl::PointCloud<pcl::PointXYZI>);
-    pcl::PointCloud<pcl::PFHRGBSignature250>::Ptr currDescriptors (new pcl::PointCloud<pcl::PFHRGBSignature250>);
-    
 
-	pcl::PCDWriter writer;
+void rigidTransformation(PointCloudXYZRGB::Ptr &source,PointCloudXYZI::Ptr &currKp, PointCloudXYZI::Ptr &prevKp, PointCloudXYZRGB::Ptr &dstCloud){
+	Eigen::Matrix4f transform;
+	pcl::registration::TransformationEstimationSVD<pcl::PointXYZI, pcl::PointXYZI> transformSVD;
+  	transformSVD.estimateRigidTransformation (*currKp, *prevKp, *ransac_corr, transform);
+	pcl::transformPointCloud(*source, *dstCloud, transform);
+}
 
-	if(check_arguments(argc,argv)){
-		ft_descriptor->setKSearch(50);
-		while(ros::ok()){
-			ros::spinOnce();
+void scene_reconstruction(PointCloudXYZRGB::Ptr source, PointCloudXYZRGB::Ptr target, int i){
+    cout << "Cloud " << i << ". Captured points: " << currCloud->size() << endl;
 
-			if (nextCloud->size() == 0)
-				continue;
+	//!!!!!!!!!!!!!!!!!!
+	//SOURCE = CURRCLOUD
+	//TARGET = PREVCLOUD
+	//!!!!!!!!!!!!!!!!!!
 
-			if(!INITIALIZED){ 
-				currCloud = nextCloud;
-			}
+	// Keypoint detection
+	PointCloudXYZI::Ptr source_kp(new PointCloudXYZI);
+	PointCloudXYZI::Ptr target_kp(new PointCloudXYZI);
+	compute_keypoints(source, source_kp);
+	compute_keypoints(target, target_kp);
 
-			cout << "CLOUD SIZE = " << currCloud->size() << endl;
-			cout << "NEXT CLOUD SIZE = " << nextCloud->size() << endl;
-			
-			// Detect keypoints
-			cout << "Detecting keypoints in " << "... " << endl;
-			detect_keypoints(currCloud, currKeypoints);
-			cout << "Detecting keypoints in " << "... " << endl;
-			detect_keypoints(nextCloud, nextKeypoints);
-			
-			// Compute PFH features
-			cout << "Computing PFH features " << "..." << endl;
-			detect_descriptors (currCloud, currKeypoints, currDescriptors);
-			cout << "Computing PFH features " << "..." << endl;
-			detect_descriptors (nextCloud, nextKeypoints, nextDescriptors);
-			
-			// Find feature correspondences
-			std::vector<int> ctnCorrespondences;
-			std::vector<int> ntcCorrespondences;
-			cout << "Find feature correspondences" << endl;
-			find_feature_correspondences (currDescriptors, nextDescriptors, ctnCorrespondences);
-			find_feature_correspondences (nextDescriptors, currDescriptors, ntcCorrespondences);
-			cout << ctnCorrespondences.size();
-			cout << "Filter feature correspondences" << endl;
-			correspondences_filter(currKeypoints, nextKeypoints,ctnCorrespondences,ntcCorrespondences);
+	// Computing descriptors
+	PFHRGBSign250::Ptr source_ft(new PFHRGBSign250);
+	PFHRGBSign250::Ptr target_ft(new PFHRGBSign250);
+	compute_descriptors(source, source_kp, source_ft);
+	compute_descriptors(target, target_kp, target_ft);
 
-			pcl::PointCloud<pcl::PointXYZRGB>::Ptr dstCloud (new pcl::PointCloud<pcl::PointXYZRGB>);
-			Eigen::Matrix4f transf_matrix = rigidTransformation(currKeypoints, nextKeypoints, ransac_corr);
-			pcl::transformPointCloud (*currCloud, *dstCloud, transf_matrix);
+	// Deterministic function to find feature correspondences between both clouds
+	std::vector<int> st_correspondences;
+	std::vector<int> ts_correspondences;
+	find_feature_correspondences(source_ft, target_ft, st_correspondences);
+	find_feature_correspondences(target_ft, source_ft, ts_correspondences);
 
-			// Applying ICP
-			pcl::PointCloud<pcl::PointXYZRGB>::Ptr transfCloud(new pcl::PointCloud<pcl::PointXYZRGB>);
-			calculate_ICP(dstCloud,transfCloud,currCloud);
-			
-			if(finalCloud->points.size()==0) {
-				*finalCloud = *transfCloud;
-				*currCloud = *transfCloud;	
-			}
-			else {
-				*finalCloud += *transfCloud;
-				*currCloud = *transfCloud;   
-			}
+	// Discarding unlikely correspondences applying RANSAC
+	filter_correspondences(source_kp, target_kp, st_correspondences, ts_correspondences);
 
-			INITIALIZED = true;
-			//Write final scene
-			//writer.write<pcl::PointXYZRGB> (FINAL_PATH, *finalCloud, false);
+	// First initial transform
+	PointCloudXYZRGB::Ptr dstCloud(new PointCloudXYZRGB);
+	rigidTransformation(source,source_kp,target_kp,dstCloud);
+	// Applying ICP
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr transfCloud(new pcl::PointCloud<pcl::PointXYZRGB>);
+	calculate_ICP(dstCloud, target, transfCloud);
+	
+	if(finalCloud->points.size() == 0) {
+		*finalCloud = *transfCloud;  
+		*prevCloud = *transfCloud;
+	}
+	else{
+		*finalCloud += *transfCloud;
+		*prevCloud = *transfCloud;
+	}
+}
+
+bool check_arguments(int argc, char** argv){
+	ARGUMENTO_PCL = "";
+	ARGUMENTO_KP = "";
+
+	bool ok = false;
+
+    if (argc == 3){
+        ARGUMENTO_PCL = argv[1];
+		ARGUMENTO_KP = argv[2];
+
+        if (ARGUMENTO_PCL == "--o")
+            ok = true;
+        else if (ARGUMENTO_PCL == "--s")
+            ok = true;
+        else if (ARGUMENTO_PCL == "--sv")
+            ok = true;
+        else if (ARGUMENTO_PCL == "--v")
+            ok = true;
+
+		if (ARGUMENTO_KP == "--h3d" && ok)
+			return true;
+		if (ARGUMENTO_KP == "--s3d" && ok)
+			return true;
+    }
+    else{
+		string usage = "{ [--o | --v | --s | --sv] [--h3d | --s3d]}";
+		cout << "Incorrect program use! Usage must be: " << endl;
+		cout << "rosrun *package_name* *executable_name* " << usage << endl;
+		return false;
+    }
+
+	return false;
+}
+
+void apply_filters(PointCloudXYZRGB::Ptr &cloud){
+	if (ARGUMENTO_PCL != "--o"){
+		if (ARGUMENTO_PCL == "--v"){
+			//voxelgrid point cloud
+			pcl::VoxelGrid<pcl::PointXYZRGB> vGrid;
+			vGrid.setInputCloud (cloud);
+			vGrid.setLeafSize (0.05f, 0.05f, 0.05f);
+			vGrid.filter (*cloud);
+			return;
+		}
+		if (ARGUMENTO_PCL == "--s"){
+			//sor point cloud
+			pcl::StatisticalOutlierRemoval<pcl::PointXYZRGB> sor;
+			sor.setInputCloud (cloud);
+			sor.setMeanK (50);
+			sor.setStddevMulThresh (1.0);
+			sor.filter (*cloud);
+			return;
+		}
+		if (ARGUMENTO_PCL == "--sv"){
+			//sor voxelgrid point cloud
+			pcl::VoxelGrid<pcl::PointXYZRGB> vGrid;
+			pcl::StatisticalOutlierRemoval<pcl::PointXYZRGB> sor;
+			sor.setInputCloud (cloud);
+			sor.setMeanK (50);
+			sor.setStddevMulThresh (1.0);
+			sor.filter (*cloud);
+			vGrid.setInputCloud (cloud);
+			vGrid.setLeafSize (0.05f, 0.05f, 0.05f);
+			vGrid.filter (*cloud);
+			return;
 		}
 	}
-    
-  //***************************************************************///
+}
 
-  
-  return (0);
+void callback(const PointCloudXYZRGB::ConstPtr& msg){
+	PointCloudXYZRGB::Ptr cloud (new PointCloudXYZRGB(*msg));
+	currCloud = cloud;
+	
+	apply_filters(currCloud);
+	
+	std::vector<int> indices;
+	currCloud->is_dense = false;
+	pcl::removeNaNFromPointCloud(*currCloud, *currCloud, indices);	
+}
+
+int main(int argc, char** argv){
+	if(check_arguments(argc, argv)){
+		cout << "Arguments initialized with: " << ARGUMENTO_PCL << " and " << ARGUMENTO_KP << "." << endl;
+		ros::init(argc, argv, "mapping_3d_node");
+		ros::NodeHandle nh;
+		ros::Subscriber sub = nh.subscribe<PointCloudXYZRGB>("/camera/depth/points", 1, callback);
+		boost::thread t(simpleVis);
+
+		int i = 0;
+		
+		while(ros::ok()){
+			ros::spinOnce();			
+			if (currCloud->size() == 0)
+				continue;
+			else if(!INITIALIZED)
+				prevCloud = currCloud;
+
+			scene_reconstruction(currCloud, prevCloud, i);
+			
+			INITIALIZED = true;
+			i++;
+		}
+	}
 }
