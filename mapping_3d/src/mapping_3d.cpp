@@ -13,6 +13,12 @@
 #include <pcl/registration/icp.h>
 #include <pcl/registration/correspondence_rejection_sample_consensus.h>
 #include <pcl/registration/transformation_estimation_svd.h>
+
+#include <pcl/point_types.h>
+#include <pcl/keypoints/impl/sift_keypoint.hpp>
+#include <pcl/visualization/pcl_visualizer.h>
+#include <chrono>
+
 using namespace std;
 using PointCloudXYZRGB = pcl::PointCloud<pcl::PointXYZRGB>;
 using PointCloudXYZI = pcl::PointCloud<pcl::PointXYZI>;
@@ -21,6 +27,7 @@ using PFHRGBSign250 = pcl::PointCloud<pcl::PFHRGBSignature250>;
 //Parametros globales
 string ARGUMENTO_PCL;
 string ARGUMENTO_KP;
+string ARGUMENTO_HARRIS;
 bool INITIALIZED = false;
 
 PointCloudXYZRGB::Ptr prevCloud (new PointCloudXYZRGB);
@@ -30,7 +37,23 @@ PointCloudXYZRGB::Ptr finalCloud (new PointCloudXYZRGB);
 pcl::Feature<pcl::PointXYZRGB, pcl::PFHRGBSignature250>::Ptr descriptor_detector (new pcl::PFHRGBEstimation<pcl::PointXYZRGB, pcl::Normal, pcl::PFHRGBSignature250>);
 boost::shared_ptr<pcl::Keypoint<pcl::PointXYZRGB, pcl::PointXYZI>> keypoint_detector;
 
-pcl::CorrespondencesPtr ransac_corr(new pcl::Correspondences);
+pcl::CorrespondencesPtr inlinerCorrespondences(new pcl::Correspondences);
+
+
+void visualize_keypoints (const PointCloudXYZRGB::Ptr points, const PointCloudXYZI::Ptr keypoints){
+	// Visualization of keypoints along with the original cloud
+	pcl::visualization::PCLVisualizer viewer("PCL Viewer");
+	pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZI> keypoints_color_handler (keypoints, 0, 255, 0);
+	pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZRGB> cloud_color_handler (points, 255, 255, 0);
+	viewer.setBackgroundColor( 0.0, 0.0, 0.0 );
+	viewer.addPointCloud(points, "cloud");
+	viewer.addPointCloud(keypoints, keypoints_color_handler, "keypoints");
+	viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 7, "keypoints");
+	
+	while(!viewer.wasStopped ()){
+		viewer.spinOnce ();
+	}
+}
 
 void simpleVis (){
   	pcl::visualization::CloudViewer viewer("Simple Cloud Viewer");
@@ -41,7 +64,7 @@ void simpleVis (){
 }
 
 void compute_keypoints(PointCloudXYZRGB::ConstPtr source, PointCloudXYZI::Ptr keypoints){
-	if (ARGUMENTO_KP == "--s3d"){
+	if (ARGUMENTO_KP == "--sift3d"){
 		//sift3d
 		pcl::SIFTKeypoint<pcl::PointXYZRGB, pcl::PointXYZI>* sift = new pcl::SIFTKeypoint<pcl::PointXYZRGB, pcl::PointXYZI>;
 		pcl::search::KdTree<pcl::PointXYZRGB>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZRGB> ());
@@ -50,13 +73,37 @@ void compute_keypoints(PointCloudXYZRGB::ConstPtr source, PointCloudXYZI::Ptr ke
 		sift->setMinimumContrast(0.0);
 		keypoint_detector.reset(sift);
 	}
-	else if (ARGUMENTO_KP == "--h3d"){
+	else if (ARGUMENTO_KP == "--harris3d"){
 		//harris3d
 		pcl::HarrisKeypoint3D<pcl::PointXYZRGB,pcl::PointXYZI>* harris3D = new pcl::HarrisKeypoint3D<pcl::PointXYZRGB,pcl::PointXYZI> (pcl::HarrisKeypoint3D<pcl::PointXYZRGB,pcl::PointXYZI>::HARRIS);
+		
 		harris3D->setNonMaxSupression(true);
 		harris3D->setRadius (0.01);
 		harris3D->setRadiusSearch (0.01);
 		keypoint_detector.reset(harris3D);
+		if (ARGUMENTO_HARRIS != ""){
+			if (ARGUMENTO_HARRIS == "--TOMASI"){
+				harris3D->setMethod(pcl::HarrisKeypoint3D<pcl::PointXYZRGB, pcl::PointXYZI>::TOMASI);
+			}
+			else if (ARGUMENTO_HARRIS == "--NOBLE"){
+				harris3D->setMethod(pcl::HarrisKeypoint3D<pcl::PointXYZRGB, pcl::PointXYZI>::NOBLE);
+			}
+			else if (ARGUMENTO_HARRIS == "--LOWE"){
+				harris3D->setMethod(pcl::HarrisKeypoint3D<pcl::PointXYZRGB, pcl::PointXYZI>::LOWE);
+			}
+			else if (ARGUMENTO_HARRIS == "--CURVATURE"){
+				harris3D->setMethod(pcl::HarrisKeypoint3D<pcl::PointXYZRGB, pcl::PointXYZI>::CURVATURE);
+			}
+			else{
+				cout << "Error argumentos de harris method." << endl;
+			}
+		}
+		else{
+			harris3D->setMethod(pcl::HarrisKeypoint3D<pcl::PointXYZRGB, pcl::PointXYZI>::HARRIS);
+		}
+	}
+	else{
+		cout << "Error argumentos en keypoint detector." << endl;
 	}
 	
 	keypoint_detector->setInputCloud(source);
@@ -105,27 +152,27 @@ void find_feature_correspondences(PFHRGBSign250::Ptr source, PFHRGBSign250::Ptr 
 }
 
 
-void filter_correspondences(PointCloudXYZI::Ptr source_kp, PointCloudXYZI::Ptr target_kp,
-							std::vector<int>& st_correspondences, std::vector<int>& ts_correspondences) {
-	std::vector<std::pair<unsigned, unsigned>> corr_pair;
+void filter_correspondences(PointCloudXYZI::Ptr currKeypoints, PointCloudXYZI::Ptr prevKeypoints,
+							std::vector<int>& currCorrespondences, std::vector<int>& prevCorrespondences) {
+	std::vector<std::pair<unsigned, unsigned>> correspondences;
 	
-	for (unsigned i = 0; i < st_correspondences.size (); ++i) {
-		if (ts_correspondences[st_correspondences[i]] == i) {
-			corr_pair.push_back(std::make_pair(i, st_correspondences[i]));
+	for (unsigned i = 0; i < currCorrespondences.size (); ++i) {
+		if (prevCorrespondences[currCorrespondences[i]] == i) {
+			correspondences.push_back(std::make_pair(i, currCorrespondences[i]));
 		}
 	}
 
-	ransac_corr->resize (corr_pair.size());
-	for (unsigned i = 0; i < corr_pair.size(); ++i){
-		(*ransac_corr)[i].index_query = corr_pair[i].first;
-		(*ransac_corr)[i].index_match = corr_pair[i].second;
+	inlinerCorrespondences->resize (correspondences.size());
+	for (unsigned i = 0; i < correspondences.size(); ++i){
+		(*inlinerCorrespondences)[i].index_query = correspondences[i].first;
+		(*inlinerCorrespondences)[i].index_match = correspondences[i].second;
 	}
 
-	pcl::registration::CorrespondenceRejectorSampleConsensus<pcl::PointXYZI> ransac;
-	ransac.setInputSource(source_kp);
-	ransac.setInputTarget(target_kp);
-	ransac.setInputCorrespondences(ransac_corr);
-	ransac.getCorrespondences(*ransac_corr);
+	pcl::registration::CorrespondenceRejectorSampleConsensus<pcl::PointXYZI> rejector;
+	rejector.setInputSource(currKeypoints);
+	rejector.setInputTarget(prevKeypoints);
+	rejector.setInputCorrespondences(inlinerCorrespondences);
+	rejector.getCorrespondences(*inlinerCorrespondences);
 }
 
 void calculate_ICP(PointCloudXYZRGB::Ptr &dstCloud, PointCloudXYZRGB::Ptr prevCloud, PointCloudXYZRGB::Ptr &finalCloud){
@@ -143,45 +190,49 @@ void calculate_ICP(PointCloudXYZRGB::Ptr &dstCloud, PointCloudXYZRGB::Ptr prevCl
 void rigidTransformation(PointCloudXYZRGB::Ptr &source,PointCloudXYZI::Ptr &currKp, PointCloudXYZI::Ptr &prevKp, PointCloudXYZRGB::Ptr &dstCloud){
 	Eigen::Matrix4f transform;
 	pcl::registration::TransformationEstimationSVD<pcl::PointXYZI, pcl::PointXYZI> transformSVD;
-  	transformSVD.estimateRigidTransformation (*currKp, *prevKp, *ransac_corr, transform);
+  	transformSVD.estimateRigidTransformation (*currKp, *prevKp, *inlinerCorrespondences, transform);
 	pcl::transformPointCloud(*source, *dstCloud, transform);
 }
 
 void scene_reconstruction(PointCloudXYZRGB::Ptr source, PointCloudXYZRGB::Ptr target, int i){
-    cout << "Cloud " << i << ". Captured points: " << currCloud->size() << endl;
-
-	//!!!!!!!!!!!!!!!!!!
-	//SOURCE = CURRCLOUD
-	//TARGET = PREVCLOUD
-	//!!!!!!!!!!!!!!!!!!
+    
+	cout << "Cloud " << i << ". Captured points: " << currCloud->size() << endl;
+	const auto before = std::chrono::system_clock::now();
 
 	// Keypoint detection
-	PointCloudXYZI::Ptr source_kp(new PointCloudXYZI);
-	PointCloudXYZI::Ptr target_kp(new PointCloudXYZI);
-	compute_keypoints(source, source_kp);
-	compute_keypoints(target, target_kp);
+	PointCloudXYZI::Ptr currKeypoints(new PointCloudXYZI);
+	PointCloudXYZI::Ptr prevKeypoints(new PointCloudXYZI);
+	compute_keypoints(source, currKeypoints);
+	//visualize_keypoints(source, currKeypoints);
+	//char c;
+	//cin >> c;
+	compute_keypoints(target, prevKeypoints);
+	//visualize_keypoints(target, prevKeypoints);
 
 	// Computing descriptors
-	PFHRGBSign250::Ptr source_ft(new PFHRGBSign250);
-	PFHRGBSign250::Ptr target_ft(new PFHRGBSign250);
-	compute_descriptors(source, source_kp, source_ft);
-	compute_descriptors(target, target_kp, target_ft);
+	PFHRGBSign250::Ptr currDescriptors(new PFHRGBSign250);
+	PFHRGBSign250::Ptr prevDescriptors(new PFHRGBSign250);
+	compute_descriptors(source, currKeypoints, currDescriptors);
+	compute_descriptors(target, prevKeypoints, prevDescriptors);
 
 	// Deterministic function to find feature correspondences between both clouds
-	std::vector<int> st_correspondences;
-	std::vector<int> ts_correspondences;
-	find_feature_correspondences(source_ft, target_ft, st_correspondences);
-	find_feature_correspondences(target_ft, source_ft, ts_correspondences);
+	std::vector<int> currCorrespondences;
+	std::vector<int> prevCorrespondences;
+	find_feature_correspondences(currDescriptors, prevDescriptors, currCorrespondences);
+	find_feature_correspondences(prevDescriptors, currDescriptors, prevCorrespondences);
 
 	// Discarding unlikely correspondences applying RANSAC
-	filter_correspondences(source_kp, target_kp, st_correspondences, ts_correspondences);
+	filter_correspondences(currKeypoints, prevKeypoints, currCorrespondences, prevCorrespondences);
 
 	// First initial transform
 	PointCloudXYZRGB::Ptr dstCloud(new PointCloudXYZRGB);
-	rigidTransformation(source,source_kp,target_kp,dstCloud);
+	rigidTransformation(source,currKeypoints,prevKeypoints,dstCloud);
 	// Applying ICP
 	pcl::PointCloud<pcl::PointXYZRGB>::Ptr transfCloud(new pcl::PointCloud<pcl::PointXYZRGB>);
 	calculate_ICP(dstCloud, target, transfCloud);
+
+	const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()-before);
+	cout << duration.count()/1000.0 << "ms" << endl;
 	
 	if(finalCloud->points.size() == 0) {
 		*finalCloud = *transfCloud;  
@@ -199,9 +250,14 @@ bool check_arguments(int argc, char** argv){
 
 	bool ok = false;
 
-    if (argc == 3){
+    if (argc >= 3){
         ARGUMENTO_PCL = argv[1];
 		ARGUMENTO_KP = argv[2];
+
+		if (argc == 4){
+			ARGUMENTO_HARRIS = argv[3];
+			cout << ARGUMENTO_PCL << " " << ARGUMENTO_KP << " " << ARGUMENTO_HARRIS << endl;
+		}
 
         if (ARGUMENTO_PCL == "--o")
             ok = true;
@@ -212,13 +268,13 @@ bool check_arguments(int argc, char** argv){
         else if (ARGUMENTO_PCL == "--v")
             ok = true;
 
-		if (ARGUMENTO_KP == "--h3d" && ok)
+		if (ARGUMENTO_KP == "--harris3d" && ok)
 			return true;
-		if (ARGUMENTO_KP == "--s3d" && ok)
+		if (ARGUMENTO_KP == "--sift3d" && ok)
 			return true;
     }
     else{
-		string usage = "{ [--o | --v | --s | --sv] [--h3d | --s3d]}";
+		string usage = "{ [--o | --v | --s | --sv] [--harris3d | --sift3d]}";
 		cout << "Incorrect program use! Usage must be: " << endl;
 		cout << "rosrun *package_name* *executable_name* " << usage << endl;
 		return false;
