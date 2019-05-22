@@ -44,13 +44,13 @@ if __name__ == '__main__':
 			if event.type == QUIT:
 				sys.exit()
 			if event.type == KEYDOWN and event.key == 275: # left
-				move_cmd.angular.z = -0.005
+				move_cmd.angular.z = -0.01
 				move_cmd.linear.x = 0.0
 			elif event.type == KEYDOWN and event.key == 276: # right
-				move_cmd.angular.z = 0.005
+				move_cmd.angular.z = 0.01
 				move_cmd.linear.x = 0.0
 			elif event.type == KEYDOWN and event.key == 273: # forward
-				move_cmd.linear.x = 0.005
+				move_cmd.linear.x = 0.01
 				move_cmd.angular.z = 0.0
 			elif event.type == KEYDOWN and event.key == 274: # backwards and stop
 				move_cmd.linear.x = 0.0
