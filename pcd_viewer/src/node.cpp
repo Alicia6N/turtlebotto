@@ -33,13 +33,13 @@ int main(int argc, char** argv){
 		index = atoi(argv[2]);
         argumento = argv[1];
         if (argumento == "--o")
-            pcd_file_path = "src/turtlebotto/get_pointclouds/src/pcd_files/original/pcd_";
+            pcd_file_path = "src/turtlebotto/get_pointclouds/src/pcd_files/original/pcd_8";
         else if (argumento == "--s")
-            pcd_file_path = "src/turtlebotto/get_pointclouds/src/pcd_files/sor/sor_pcd_";
+            pcd_file_path = "src/turtlebotto/get_pointclouds/src/pcd_files/sor/sor_pcd_8";
         else if (argumento == "--sv")
-            pcd_file_path = "src/turtlebotto/get_pointclouds/src/pcd_files/sor_filtered/sor_filtered_pcd_";
+            pcd_file_path = "src/turtlebotto/get_pointclouds/src/pcd_files/sor_filtered/sor_filtered_pcd_8";
         else if (argumento == "--v")
-            pcd_file_path = "src/turtlebotto/get_pointclouds/src/pcd_files/filtered/filtered_pcd_";
+            pcd_file_path = "src/turtlebotto/get_pointclouds/src/pcd_files/filtered/filtered_pcd_8";
 
 		argumento += to_string(index);
     }
