@@ -35,22 +35,34 @@ pcl::Feature<pcl::PointXYZRGB, pcl::PFHRGBSignature250>::Ptr descriptor_detector
 boost::shared_ptr<pcl::Keypoint<pcl::PointXYZRGB, pcl::PointXYZI>> keypoint_detector;
 
 pcl::CorrespondencesPtr inlinerCorrespondences(new pcl::Correspondences);
-
-
-void visualize_keypoints (const PointCloudXYZRGB::Ptr points, const PointCloudXYZI::Ptr keypoints){
+//pcl::visualization::PCLVisualizer visualizer_;
+//pcl::visualization::PCLVisualizer viewer("PCL Viewer");
+/*void visualize_keypoints (const PointCloudXYZRGB::Ptr points, const PointCloudXYZI::Ptr keypoints){
 	// Visualization of keypoints along with the original cloud
-	pcl::visualization::PCLVisualizer viewer("PCL Viewer");
+
 	pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZI> keypoints_color_handler (keypoints, 0, 255, 0);
 	pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZRGB> cloud_color_handler (points, 255, 255, 0);
 	viewer.setBackgroundColor( 0.0, 0.0, 0.0 );
 	viewer.addPointCloud(points, "cloud");
 	viewer.addPointCloud(keypoints, keypoints_color_handler, "keypoints");
-	viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 7, "keypoints");
+	viewer.setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "keypoints");
 	
 	while(!viewer.wasStopped ()){
 		viewer.spinOnce ();
 	}
-}
+}*/
+/*void visualize_normals (const pcl::PointCloud<pcl::PointXYZRGB>::Ptr points,
+                        const pcl::PointCloud<pcl::PointXYZRGB>::Ptr normal_points,
+                        const pcl::PointCloud<pcl::Normal>::Ptr normals)
+{
+  // Add the points and normals to the vizualizer
+  pcl::visualization::PCLVisualizer viz;
+  viz.addPointCloud (points, "points");
+  viz.addPointCloud (normal_points, "normal_points");
+  viz.addPointCloudNormals<pcl::PointXYZRGB, pcl::Normal> (normal_points, normals, 1, 0.01, "normals");
+  // Give control over to the visualizer
+  viz.spin ();
+}*/
 
 void simpleVis (){
   	pcl::visualization::CloudViewer viewer("Simple Cloud Viewer");
@@ -197,8 +209,7 @@ void rigidTransformation(PointCloudXYZRGB::Ptr &source,PointCloudXYZI::Ptr &curr
 
 void scene_reconstruction(PointCloudXYZRGB::Ptr source, PointCloudXYZRGB::Ptr target, int i){
     cout << "------------------------------------\n";
-	cout << "Cloud Nº" << i << "\n";
-	cout <<  ">> Captured points: " << currCloud->size() << "\n";
+	cout << ">> Cloud Nº" << i << "\n";
 	const auto before = std::chrono::system_clock::now();
 
 	// Keypoint detection
@@ -219,11 +230,12 @@ void scene_reconstruction(PointCloudXYZRGB::Ptr source, PointCloudXYZRGB::Ptr ta
 	std::vector<int> currCorrespondences;
 	std::vector<int> prevCorrespondences;
 	find_feature_correspondences(currDescriptors, prevDescriptors, currCorrespondences);
+	cout << ">> Correspondences (Source to target): " << currCorrespondences.size() << "\n";
 	find_feature_correspondences(prevDescriptors, currDescriptors, prevCorrespondences);
-
+	cout << ">> Correspondences (Target to source): " << prevCorrespondences.size() << "\n";
 	// Applying RANSAC we reject useless correspondences.
 	filter_correspondences(currKeypoints, prevKeypoints, currCorrespondences, prevCorrespondences);
-
+	cout << ">> Inlier Correspondences: " << inlinerCorrespondences->size() << "\n"; 
 	// First initial transform
 	PointCloudXYZRGB::Ptr dstCloud(new PointCloudXYZRGB);
 	rigidTransformation(source,currKeypoints,prevKeypoints,dstCloud);
@@ -232,13 +244,18 @@ void scene_reconstruction(PointCloudXYZRGB::Ptr source, PointCloudXYZRGB::Ptr ta
 	calculate_ICP(dstCloud, target, transfCloud);
 
 	const auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()-before);
-	cout << duration.count()/1000.0 << "ms" << "\n";
+	cout << ">> Duration: " << duration.count()/1000.0 << "ms" << "\n";
 	
+	cout << ">> Reconstructing scene...\n";
 	if(finalCloud->points.size() == 0) {
+		//*finalCloud = *dstCloud;  
+		//*prevCloud = *dstCloud;
 		*finalCloud = *transfCloud;  
 		*prevCloud = *transfCloud;
 	}
 	else{
+		//*finalCloud += *dstCloud;
+		//*prevCloud = *dstCloud;
 		*finalCloud += *transfCloud;
 		*prevCloud = *transfCloud;
 	}
@@ -290,7 +307,7 @@ void apply_filters(PointCloudXYZRGB::Ptr &cloud){
 			//voxelgrid point cloud
 			pcl::VoxelGrid<pcl::PointXYZRGB> vGrid;
 			vGrid.setInputCloud (cloud);
-			vGrid.setLeafSize (0.05, 0.05, 0.05);
+			vGrid.setLeafSize (0.025, 0.025, 0.025);
 			vGrid.setDownsampleAllData(true);
 			vGrid.filter (*cloud);
 			return;
@@ -309,7 +326,7 @@ void apply_filters(PointCloudXYZRGB::Ptr &cloud){
 			pcl::VoxelGrid<pcl::PointXYZRGB> vGrid;
 			pcl::StatisticalOutlierRemoval<pcl::PointXYZRGB> sor;
 			vGrid.setInputCloud (cloud);
-			vGrid.setLeafSize (0.05, 0.05, 0.05);
+			vGrid.setLeafSize (0.025, 0.025, 0.025);
 			vGrid.filter (*cloud);
 			sor.setInputCloud (cloud);
 			sor.setMeanK (50);
@@ -318,14 +335,15 @@ void apply_filters(PointCloudXYZRGB::Ptr &cloud){
 			return;
 		}
 	}
+	
 }
 
 void callback(const PointCloudXYZRGB::ConstPtr& msg){
 	PointCloudXYZRGB::Ptr cloud (new PointCloudXYZRGB(*msg));
 	currCloud = cloud;
-	
+	cout << ">> Captured points before applying filters: " << currCloud->points.size() << "\n";
 	apply_filters(currCloud);
-	
+	cout << ">> Captured points after applying filters: " << currCloud->points.size() << "\n";
 	std::vector<int> indices;
 	currCloud->is_dense = false;
 	pcl::removeNaNFromPointCloud(*currCloud, *currCloud, indices);	
@@ -333,7 +351,7 @@ void callback(const PointCloudXYZRGB::ConstPtr& msg){
 
 int main(int argc, char** argv){
 	if(check_arguments(argc, argv)){
-		cout << "Arguments initialized with: " << ARGUMENTO_PCL << " and " << ARGUMENTO_KP << "." << "\n";
+		cout << "@@@ Arguments initialized with: " << ARGUMENTO_PCL << " and " << ARGUMENTO_KP << ". @@@" << "\n";
 		ros::init(argc, argv, "mapping_3d_node");
 		ros::NodeHandle nh;
 		ros::Subscriber sub = nh.subscribe<PointCloudXYZRGB>("/camera/depth/points", 1, callback);
