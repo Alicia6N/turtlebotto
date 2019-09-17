@@ -2,7 +2,9 @@
 Turtlebotto is a 3D mapping system under the environment ROS - Gazebo.
 ## Introduction
 This task’s objective is to develop a system capable to perform the 3D mapping of the interior house shown in the following image.
+
 ![alt text](https://i.gyazo.com/4ab8c289b6e8335999c93c4a7f8c9f1f.png)
+
 This can be achieved by using a Kinect camera attached to our Turtlebot robot for the ROS Gazebo virtual environment.
 Since robot’s movement can be teleoperated or autonomous, we decided that will be teleoperated for the sake of capturing data easily as we need.
 3D mapping will be done by using Point Cloud Library, which will help us processing and filtering the point clouds captured by our robot’s topic.
